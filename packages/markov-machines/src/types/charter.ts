@@ -43,7 +43,7 @@ export interface RunResult<R, S> {
   /** Updated root state (persists across transitions) */
   rootState: R;
   /** Current node (may have transitioned) */
-  node: Node<R, S>;
+  node: Node<S>;
   /** New messages from this turn */
   messages: Message[];
   /** Why the run stopped */
@@ -52,18 +52,18 @@ export interface RunResult<R, S> {
 
 /**
  * Charter configuration for createCharter.
+ * R is the root state type.
  */
 export interface CharterConfig<R = unknown> {
   name: string;
   executor: Executor;
   /** Charter tools - only have access to root state */
   tools?: Record<string, AnyCharterToolDefinition<R>>;
-  /** Registered transitions (different transitions may have different state types) */
+  /** Charter-level transitions (see root state R) */
+  transitions?: Record<string, Transition<R>>;
+  /** Registered nodes (nodes have varying state types, no knowledge of R) */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  transitions?: Record<string, Transition<R, any>>;
-  /** Registered nodes (different nodes may have different state types) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nodes?: Record<string, Node<R, any>>;
+  nodes?: Record<string, Node<any>>;
   config: ModelConfig;
   /** Zod validator for root state. Defaults to z.object({}) if not provided. */
   rootValidator?: z.ZodType<R>;
@@ -73,20 +73,20 @@ export interface CharterConfig<R = unknown> {
 
 /**
  * Charter instance - the registry of tools, transitions, and nodes.
- * Only parameterized by root state type R since different nodes
- * can have different state types.
+ * Only parameterized by root state type R.
+ * Charter transitions see root state R.
+ * Nodes are independent and have their own state types.
  */
 export interface Charter<R = unknown> {
   name: string;
   executor: Executor;
   /** Charter tools - only have access to root state */
   tools: Record<string, AnyCharterToolDefinition<R>>;
-  /** Registered transitions (different transitions may have different state types) */
+  /** Charter-level transitions (see root state R) */
+  transitions: Record<string, Transition<R>>;
+  /** Registered nodes (nodes have varying state types, no knowledge of R) */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  transitions: Record<string, Transition<R, any>>;
-  /** Registered nodes (different nodes may have different state types) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nodes: Record<string, Node<R, any>>;
+  nodes: Record<string, Node<any>>;
   config: ModelConfig;
   /** Zod validator for root state */
   rootValidator: z.ZodType<R>;

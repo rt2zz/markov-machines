@@ -13,7 +13,7 @@ import { isCodeTransition, isGeneralTransition } from "../types/transitions.js";
  * Otherwise, serializes the full node.
  */
 export function serializeNode<R, S>(
-  node: Node<R, S>,
+  node: Node<S>,
   charter?: Charter<R>,
 ): SerialNode<S> | Ref {
   // Check if this node is registered in the charter
@@ -45,7 +45,6 @@ export function serializeNode<R, S>(
 
   return {
     instructions: node.instructions,
-    charterTools: node.charterTools,
     validator,
     transitions,
     initialState: node.initialState,
@@ -56,7 +55,7 @@ export function serializeNode<R, S>(
  * Serialize a transition to a Ref or inline definition.
  */
 function serializeTransition<R, S>(
-  transition: Transition<R, S>,
+  transition: Transition<S>,
   charter?: Charter<R>,
 ): Ref | SerialNode {
   // If it's already a ref, keep it

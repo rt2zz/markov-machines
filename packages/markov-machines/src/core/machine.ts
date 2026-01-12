@@ -8,7 +8,7 @@ import type { Machine, MachineConfig } from "../types/machine.js";
  */
 export function createMachine<R, S>(
   charter: Charter<R>,
-  node: Node<R, S>,
+  node: Node<S>,
   config: MachineConfig<R, S>,
 ): Machine<R, S> {
   const { state, rootState, history = [] } = config;

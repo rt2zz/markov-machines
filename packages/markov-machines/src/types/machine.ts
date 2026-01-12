@@ -21,8 +21,8 @@ export interface MachineConfig<R, S> {
 export interface Machine<R = unknown, S = unknown> {
   /** Reference to the charter */
   charter: Charter<R>;
-  /** Current node */
-  node: Node<R, S>;
+  /** Current node (has no knowledge of charter/root state) */
+  node: Node<S>;
   /** Current node state */
   state: S;
   /** Root state (persists across transitions) */

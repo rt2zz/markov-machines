@@ -167,12 +167,8 @@ export class StandardExecutor implements Executor {
             continue;
           }
 
-          // Check if this is a charter tool (referenced via charterTools)
-          const isCharterTool = currentNode.charterTools.some(
-            (ref) => machine.charter.tools[ref.ref]?.name === name,
-          );
-
-          if (isCharterTool) {
+          // Check if this is a charter tool (defined on charter)
+          if (name in machine.charter.tools) {
             // Execute charter tool (root state access only)
             const { result: toolResultStr, isError } = await executeCharterTool(
               machine.charter,
@@ -243,28 +239,20 @@ export class StandardExecutor implements Executor {
             throw new Error(`Unknown transition: ${queuedTransition.name}`);
           }
 
-          // Resolve ref if needed
-          let resolvedTransition: Transition<R, S>;
-          if (isRef(transition)) {
-            const resolved = machine.charter.transitions[transition.ref];
-            if (!resolved) {
-              throw new Error(`Unknown transition ref: ${transition.ref}`);
-            }
-            resolvedTransition = resolved;
-          } else {
-            resolvedTransition = transition;
-          }
+          // Determine which state to pass based on whether it's a charter or node transition
+          // Ref transitions are charter-level (pass rootState), inline transitions are node-level (pass nodeState)
+          const isCharterTransition = isRef(transition);
+          const stateForTransition = isCharterTransition ? currentRootState : currentState;
 
           const result = await executeTransition(
             machine.charter,
-            resolvedTransition,
-            currentState,
-            currentRootState,
+            transition as Transition<unknown>,
+            stateForTransition,
             queuedTransition.reason,
             queuedTransition.args,
           );
 
-          currentNode = result.node as Node<R, S>;
+          currentNode = result.node as Node<S>;
 
           // Update state: use returned state, or node's initialState, or throw
           if (result.state !== undefined) {
@@ -298,7 +286,7 @@ export class StandardExecutor implements Executor {
    * Build system prompt for the current node.
    */
   protected buildSystemPrompt<R, S>(
-    node: Node<R, S>,
+    node: Node<S>,
     rootState: R,
     state: S,
   ): string {
@@ -334,8 +322,8 @@ ${JSON.stringify(state, null, 2)}
   /**
    * Build the transitions section of the system prompt.
    */
-  protected buildTransitionsSection<R, S>(
-    transitions: Record<string, Transition<R, S>>,
+  protected buildTransitionsSection<S>(
+    transitions: Record<string, Transition<S>>,
   ): string {
     const transitionList = Object.entries(transitions)
       .map(([name, t]) => {

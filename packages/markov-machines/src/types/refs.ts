@@ -13,12 +13,10 @@ export interface Ref {
 /**
  * Serializable node definition.
  * Used for inline node definitions in transitions or persistence.
- * Note: Only charter tool refs can be serialized. Inline node tools
- * (which have execute functions) cannot be serialized.
+ * Note: Inline node tools (which have execute functions) cannot be serialized.
  */
 export interface SerialNode<S = unknown> {
   instructions: string;
-  charterTools: Ref[];
   validator: JSONSchema;
   transitions: Record<string, Ref | SerialTransition>;
   /** Optional initial state for this node */
@@ -55,7 +53,6 @@ export function isSerialNode<S>(value: unknown): value is SerialNode<S> {
     typeof value === "object" &&
     value !== null &&
     "instructions" in value &&
-    "charterTools" in value &&
     "validator" in value &&
     "transitions" in value
   );

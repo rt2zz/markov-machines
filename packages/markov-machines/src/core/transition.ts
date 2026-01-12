@@ -8,8 +8,9 @@ import type {
 
 /**
  * Configuration for creating a transition.
+ * S is the source state type (root state for charter transitions, node state for node transitions).
  */
-export interface TransitionConfig<R, S> {
+export interface TransitionConfig<S> {
   description: string;
   /** Optional custom arguments schema */
   arguments?: z.ZodType;
@@ -19,40 +20,41 @@ export interface TransitionConfig<R, S> {
    */
   execute: (
     state: S,
-    ctx: TransitionContext<R>,
-  ) => Promise<TransitionResult<R>> | TransitionResult<R>;
+    ctx: TransitionContext,
+  ) => Promise<TransitionResult> | TransitionResult;
 }
 
 /**
- * Create a new code transition with explicit type parameters.
+ * Create a new code transition with explicit type parameter.
  */
-export function createTransition<R, S = unknown>(
-  config: TransitionConfig<R, S>,
-): CodeTransition<R, S>;
+export function createTransition<S = unknown>(
+  config: TransitionConfig<S>,
+): CodeTransition<S>;
 
 /**
  * Create a new code transition with source state type inferred from a node.
  * The node parameter is only used for type inference.
  */
-export function createTransition<R, S>(
-  from: Node<R, S>,
-  config: TransitionConfig<R, S>,
-): CodeTransition<R, S>;
+export function createTransition<S>(
+  from: Node<S>,
+  config: TransitionConfig<S>,
+): CodeTransition<S>;
 
 /**
  * Create a new code transition.
+ * S is the source state type - root state for charter transitions, node state for node transitions.
  *
  * @example
- * // With explicit types
- * const toCheckout = createTransition<RootState, CartState>({
+ * // With explicit types (for charter transition)
+ * const toCheckout = createTransition<RootState>({
  *   description: "Proceed to checkout",
- *   execute: (state, ctx) => transitionTo(checkoutNode, {
- *     items: state.cart,
+ *   execute: (rootState, ctx) => transitionTo(checkoutNode, {
+ *     items: rootState.cart,
  *   }),
  * });
  *
  * @example
- * // With type inference from source node
+ * // With type inference from source node (for node transition)
  * const toCheckout = createTransition(cartNode, {
  *   description: "Proceed to checkout",
  *   execute: (state, ctx) => transitionTo(checkoutNode, {
@@ -60,12 +62,12 @@ export function createTransition<R, S>(
  *   }),
  * });
  */
-export function createTransition<R, S>(
-  configOrFrom: TransitionConfig<R, S> | Node<R, S>,
-  maybeConfig?: TransitionConfig<R, S>,
-): CodeTransition<R, S> {
+export function createTransition<S>(
+  configOrFrom: TransitionConfig<S> | Node<S>,
+  maybeConfig?: TransitionConfig<S>,
+): CodeTransition<S> {
   // Overload resolution: if second arg exists, first arg is the node
-  const config = maybeConfig ?? (configOrFrom as TransitionConfig<R, S>);
+  const config = maybeConfig ?? (configOrFrom as TransitionConfig<S>);
 
   return {
     description: config.description,

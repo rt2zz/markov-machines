@@ -12,11 +12,11 @@ import { isRef } from "../types/refs.js";
 
 /**
  * Generate Anthropic tool definitions for a node.
- * Includes: updateState, transition tools, and charter tools.
+ * Includes: updateState, transition tools, charter tools, and node tools.
  */
 export function generateToolDefinitions<R, S>(
   charter: Charter<R>,
-  node: Node<R, S>,
+  node: Node<S>,
 ): AnthropicToolDefinition[] {
   const tools: AnthropicToolDefinition[] = [];
 
@@ -103,19 +103,16 @@ export function generateToolDefinitions<R, S>(
     });
   }
 
-  // 3. Add charter tools referenced by this node (root state access)
-  for (const toolRef of node.charterTools) {
-    const tool = charter.tools[toolRef.ref];
-    if (tool) {
-      const inputSchema = z.toJSONSchema(tool.inputSchema, {
-        target: "openapi-3.0",
-      });
-      tools.push({
-        name: tool.name,
-        description: tool.description,
-        input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
-      });
-    }
+  // 3. Add all charter tools (root state access)
+  for (const [name, tool] of Object.entries(charter.tools)) {
+    const inputSchema = z.toJSONSchema(tool.inputSchema, {
+      target: "openapi-3.0",
+    });
+    tools.push({
+      name: tool.name,
+      description: tool.description,
+      input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
+    });
   }
 
   // 4. Add inline node tools (node state access)
@@ -138,14 +135,14 @@ export function generateToolDefinitions<R, S>(
  */
 function resolveTransition<R, S>(
   charter: Charter<R>,
-  transition: Transition<R, S>,
-): Transition<R, S> {
+  transition: Transition<S>,
+): Transition<S> {
   if (isRef(transition)) {
     const resolved = charter.transitions[transition.ref];
     if (!resolved) {
       throw new Error(`Unknown transition ref: ${transition.ref}`);
     }
-    return resolved as Transition<R, S>;
+    return resolved as Transition<S>;
   }
   return transition;
 }
@@ -153,7 +150,7 @@ function resolveTransition<R, S>(
 /**
  * Get the description for a transition.
  */
-function getTransitionDescription<R, S>(transition: Transition<R, S>): string {
+function getTransitionDescription<S>(transition: Transition<S>): string {
   if (isCodeTransition(transition)) {
     return transition.description;
   }
@@ -169,8 +166,8 @@ function getTransitionDescription<R, S>(transition: Transition<R, S>): string {
 /**
  * Get the arguments schema for a transition with custom args.
  */
-function getTransitionArgsSchema<R, S>(
-  transition: Transition<R, S>,
+function getTransitionArgsSchema<S>(
+  transition: Transition<S>,
 ): Record<string, unknown> {
   if (isCodeTransition(transition) && transition.arguments) {
     const schema = z.toJSONSchema(transition.arguments, { target: "openapi-3.0" });

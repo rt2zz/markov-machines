@@ -25,7 +25,7 @@ export interface NodeToolContext<S = unknown> {
 
 /**
  * Charter tool definition - only has access to root state.
- * Defined on the charter and referenced by nodes via charterTools.
+ * Defined on the charter.
  */
 export interface CharterToolDefinition<
   TInput = unknown,

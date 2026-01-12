@@ -53,9 +53,8 @@ export async function executeCharterTool<R>(
 /**
  * Execute a node tool (node state access only).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function executeNodeTool<S>(
-  node: Node<any, S>,
+  node: Node<S>,
   toolName: string,
   input: unknown,
   state: S,

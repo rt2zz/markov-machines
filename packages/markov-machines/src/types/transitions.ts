@@ -4,24 +4,23 @@ import type { Node } from "./node.js";
 
 /**
  * Context passed to code transition execute functions.
+ * Symmetric at both charter and node levels.
  */
-export interface TransitionContext<R = unknown> {
+export interface TransitionContext {
   /** Arguments passed by the agent when calling the transition */
   args: unknown;
   /** Reason provided by the agent for the transition */
   reason: string;
-  /** Root state (persists across transitions) */
-  rootState: R;
 }
 
 /**
  * Result of executing a code transition.
  * Returns the target node and optionally the new state.
- * R is the root state type, T is the target node's state type.
+ * T is the target node's state type.
  */
-export interface TransitionResult<R = unknown, T = unknown> {
+export interface TransitionResult<T = unknown> {
   /** The target node to transition to */
-  node: Node<R, T>;
+  node: Node<T>;
   /**
    * The new state for the target node.
    * If undefined, the node's default initial state will be used.
@@ -32,9 +31,9 @@ export interface TransitionResult<R = unknown, T = unknown> {
 /**
  * Code-defined transition (not serializable).
  * Executes custom logic to determine the target node and state.
- * R is the root state type, S is the source node's state type.
+ * S is the source state type (root state for charter transitions, node state for node transitions).
  */
-export interface CodeTransition<R = unknown, S = unknown> {
+export interface CodeTransition<S = unknown> {
   description: string;
   /** Optional custom arguments schema */
   arguments?: z.ZodType;
@@ -45,8 +44,8 @@ export interface CodeTransition<R = unknown, S = unknown> {
    */
   execute: (
     state: S,
-    ctx: TransitionContext<R>,
-  ) => Promise<TransitionResult<R>> | TransitionResult<R>;
+    ctx: TransitionContext,
+  ) => Promise<TransitionResult> | TransitionResult;
 }
 
 /**
@@ -60,13 +59,14 @@ export interface GeneralTransition {
 
 /**
  * Union of all transition types.
+ * S is the source state type.
  * - CodeTransition: Custom code-defined transition
  * - SerialTransition: Serializable transition referencing a node
  * - GeneralTransition: Agent can create nodes dynamically
  * - Ref: Reference to a transition in the charter registry
  */
-export type Transition<R = unknown, S = unknown> =
-  | CodeTransition<R, S>
+export type Transition<S = unknown> =
+  | CodeTransition<S>
   | SerialTransition
   | GeneralTransition
   | Ref;
@@ -75,25 +75,25 @@ export type Transition<R = unknown, S = unknown> =
  * Helper to create a type-safe transition result.
  * Ensures the state matches the target node's state type.
  */
-export function transitionTo<R, T>(
-  node: Node<R, T>,
+export function transitionTo<T>(
+  node: Node<T>,
   state?: T,
-): TransitionResult<R, T> {
+): TransitionResult<T> {
   return { node, state };
 }
 
 /**
  * Type guard for CodeTransition
  */
-export function isCodeTransition<R, S>(
+export function isCodeTransition<S>(
   value: unknown,
-): value is CodeTransition<R, S> {
+): value is CodeTransition<S> {
   return (
     typeof value === "object" &&
     value !== null &&
     "description" in value &&
     "execute" in value &&
-    typeof (value as CodeTransition<R, S>).execute === "function"
+    typeof (value as CodeTransition<S>).execute === "function"
   );
 }
 
@@ -112,8 +112,8 @@ export function isGeneralTransition(value: unknown): value is GeneralTransition 
 /**
  * Check if a transition has custom arguments (requires named tool).
  */
-export function transitionHasArguments<R, S>(
-  transition: Transition<R, S>,
+export function transitionHasArguments<S>(
+  transition: Transition<S>,
 ): boolean {
   if (isCodeTransition(transition)) {
     return transition.arguments !== undefined;
