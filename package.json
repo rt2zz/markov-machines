@@ -2,7 +2,7 @@
   "name": "machines",
   "type": "module",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/*", "apps/*"],
   "devDependencies": {
     "@types/bun": "latest"
   },

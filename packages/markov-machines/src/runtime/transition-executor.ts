@@ -84,8 +84,7 @@ export function deserializeNode<R, S>(
   // Deserialize the JSON Schema validator back to a Zod schema.
   // Note: fromJSONSchema returns z.ZodType<unknown>, but we need z.ZodType<S>.
   // TypeScript can't infer the generic from serialized data at runtime.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const validator = z.fromJSONSchema(serialNode.validator) as any;
+  const validator = z.fromJSONSchema(serialNode.validator) as z.ZodType<S>;
 
   // Resolve transition refs
   const transitions: Record<string, Transition<R, S>> = {};

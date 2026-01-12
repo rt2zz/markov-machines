@@ -3,7 +3,7 @@ import type { MessageParam, ContentBlock as AnthropicContentBlock } from "@anthr
 import type { Machine } from "../types/machine.js";
 import type { Node } from "../types/node.js";
 import type { RunOptions, RunResult } from "../types/charter.js";
-import type { Message, ContentBlock } from "../types/messages.js";
+import type { Message, ContentBlock, ToolResultBlock } from "../types/messages.js";
 import type { Transition } from "../types/transitions.js";
 import { userMessage, assistantMessage, toolResult, getMessageText } from "../types/messages.js";
 import { generateToolDefinitions } from "../tools/tool-generator.js";
@@ -103,7 +103,7 @@ export class StandardExecutor implements Executor {
 
       // Process tool uses
       if (response.stop_reason === "tool_use") {
-        const toolResults: ContentBlock[] = [];
+        const toolResults: ToolResultBlock[] = [];
         let queuedTransition: {
           name: string;
           reason: string;
@@ -230,9 +230,9 @@ export class StandardExecutor implements Executor {
           role: "user",
           content: toolResults.map((r) => ({
             type: "tool_result" as const,
-            tool_use_id: (r as { tool_use_id: string }).tool_use_id,
-            content: (r as { content: string }).content,
-            is_error: (r as { is_error?: boolean }).is_error,
+            tool_use_id: r.tool_use_id,
+            content: r.content,
+            is_error: r.is_error,
           })),
         });
 
