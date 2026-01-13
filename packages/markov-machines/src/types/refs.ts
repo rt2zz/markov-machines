@@ -4,7 +4,7 @@
 export type JSONSchema = Record<string, unknown>;
 
 /**
- * Unified registry reference for tools, nodes, and transitions.
+ * Unified registry reference for executors, tools, nodes, and transitions.
  */
 export interface Ref {
   ref: string;
@@ -16,6 +16,8 @@ export interface Ref {
  * Note: Inline node tools (which have execute functions) cannot be serialized.
  */
 export interface SerialNode<S = unknown> {
+  /** Reference to executor in charter.executors */
+  executor: Ref;
   instructions: string;
   validator: JSONSchema;
   transitions: Record<string, Ref | SerialTransition>;
@@ -52,6 +54,7 @@ export function isSerialNode<S>(value: unknown): value is SerialNode<S> {
   return (
     typeof value === "object" &&
     value !== null &&
+    "executor" in value &&
     "instructions" in value &&
     "validator" in value &&
     "transitions" in value

@@ -1,99 +1,48 @@
-import type { Charter } from "../types/charter.js";
-import type { Node } from "../types/node.js";
-import type { CharterToolContext, NodeToolContext } from "../types/tools.js";
+import type { AnyToolDefinition, ToolContext } from "../types/tools.js";
 
 /**
- * Execute a charter tool (root state access only).
+ * Result of executing a tool.
  */
-export async function executeCharterTool<R>(
-  charter: Charter<R>,
-  toolName: string,
-  input: unknown,
-  rootState: R,
-  onRootStateUpdate: (patch: Partial<R>) => void,
-): Promise<{ result: string; isError: boolean }> {
-  const tool = charter.tools[toolName];
-
-  if (!tool) {
-    return {
-      result: `Unknown charter tool: ${toolName}`,
-      isError: true,
-    };
-  }
-
-  // Validate input
-  const parseResult = tool.inputSchema.safeParse(input);
-  if (!parseResult.success) {
-    return {
-      result: `Invalid input for tool ${toolName}: ${parseResult.error.message}`,
-      isError: true,
-    };
-  }
-
-  // Create charter tool context (root state only)
-  const ctx: CharterToolContext<R> = {
-    rootState,
-    updateRootState: onRootStateUpdate,
-  };
-
-  try {
-    const result = await tool.execute(parseResult.data, ctx);
-    return {
-      result: typeof result === "string" ? result : JSON.stringify(result),
-      isError: false,
-    };
-  } catch (error) {
-    return {
-      result: error instanceof Error ? error.message : String(error),
-      isError: true,
-    };
-  }
+export interface ToolExecutionResult {
+  result: string;
+  isError: boolean;
 }
 
 /**
- * Execute a node tool (node state access only).
+ * Execute a tool with the given input and state.
  */
-export async function executeNodeTool<S>(
-  node: Node<S>,
-  toolName: string,
+export async function executeTool<S>(
+  tool: AnyToolDefinition<S>,
   input: unknown,
   state: S,
   onStateUpdate: (patch: Partial<S>) => void,
-): Promise<{ result: string; isError: boolean }> {
-  const tool = node.tools[toolName];
-
-  if (!tool) {
-    return {
-      result: `Unknown node tool: ${toolName}`,
-      isError: true,
-    };
-  }
-
-  // Validate input
-  const parseResult = tool.inputSchema.safeParse(input);
-  if (!parseResult.success) {
-    return {
-      result: `Invalid input for tool ${toolName}: ${parseResult.error.message}`,
-      isError: true,
-    };
-  }
-
-  // Create node tool context (node state only)
-  const ctx: NodeToolContext<S> = {
-    state,
-    updateState: onStateUpdate,
-  };
-
+): Promise<ToolExecutionResult> {
   try {
-    const result = await tool.execute(parseResult.data, ctx);
-    return {
-      result: typeof result === "string" ? result : JSON.stringify(result),
-      isError: false,
+    // Validate input
+    const inputResult = tool.inputSchema.safeParse(input);
+    if (!inputResult.success) {
+      return {
+        result: `Invalid tool input: ${inputResult.error.message}`,
+        isError: true,
+      };
+    }
+
+    // Create context
+    const ctx: ToolContext<S> = {
+      state,
+      updateState: onStateUpdate,
     };
+
+    // Execute tool
+    const output = await tool.execute(inputResult.data, ctx);
+
+    // Convert output to string
+    const resultStr =
+      typeof output === "string" ? output : JSON.stringify(output);
+
+    return { result: resultStr, isError: false };
   } catch (error) {
-    return {
-      result: error instanceof Error ? error.message : String(error),
-      isError: true,
-    };
+    const message = error instanceof Error ? error.message : String(error);
+    return { result: `Tool execution error: ${message}`, isError: true };
   }
 }

@@ -8,15 +8,14 @@ import {
   isCodeTransition,
   isGeneralTransition,
 } from "../types/transitions.js";
-import { isRef, isSerialNode, isSerialTransition } from "../types/refs.js";
+import { isRef, isSerialTransition } from "../types/refs.js";
 
 /**
  * Execute a transition and return the target node and optional new state.
- * S is the source state type (root state for charter transitions, node state for node transitions).
- * The caller is responsible for passing the correct state type.
+ * S is the source state type.
  */
-export async function executeTransition<R, S>(
-  charter: Charter<R>,
+export async function executeTransition<S>(
+  charter: Charter,
   transition: Transition<S>,
   state: S,
   reason: string,
@@ -24,7 +23,7 @@ export async function executeTransition<R, S>(
 ): Promise<TransitionResult> {
   const ctx: TransitionContext = { args, reason };
 
-  // Resolve ref to actual transition (refs point to charter transitions which use R)
+  // Resolve ref to actual transition
   const resolved = isRef(transition)
     ? charter.transitions[transition.ref]
     : transition;
@@ -67,8 +66,8 @@ export async function executeTransition<R, S>(
  * Resolves transition refs from the charter.
  * Note: Inline node tools cannot be serialized and will be empty on deserialization.
  */
-export function deserializeNode<R, S>(
-  charter: Charter<R>,
+export function deserializeNode<S>(
+  charter: Charter,
   serialNode: SerialNode<S>,
 ): Node<S> {
   // Deserialize the JSON Schema validator back to a Zod schema.
@@ -76,7 +75,7 @@ export function deserializeNode<R, S>(
   // TypeScript can't infer the generic from serialized data at runtime.
   const validator = z.fromJSONSchema(serialNode.validator) as z.ZodType<S>;
 
-  // Resolve transition refs (refs point to charter transitions)
+  // Resolve transition refs
   const transitions: Record<string, Transition<S>> = {};
   for (const [name, trans] of Object.entries(serialNode.transitions)) {
     if (isRef(trans)) {
@@ -84,8 +83,6 @@ export function deserializeNode<R, S>(
       if (!resolved) {
         throw new Error(`Unknown transition ref in inline node: ${trans.ref}`);
       }
-      // Type assertion: charter transition (Transition<R>) used as Transition<S>
-      // This is safe at runtime since transitions just navigate to nodes
       transitions[name] = resolved as unknown as Transition<S>;
     } else {
       transitions[name] = trans as Transition<S>;
@@ -94,6 +91,7 @@ export function deserializeNode<R, S>(
 
   return {
     id: uuid(),
+    executor: serialNode.executor,
     instructions: serialNode.instructions,
     tools: {}, // Inline node tools cannot be serialized
     validator,
@@ -105,8 +103,8 @@ export function deserializeNode<R, S>(
 /**
  * Resolve a node reference or return the inline node.
  */
-export function resolveNodeRef<R, S>(
-  charter: Charter<R>,
+export function resolveNodeRef<S>(
+  charter: Charter,
   nodeRef: Ref | SerialNode<S>,
 ): Node<S> {
   if (isRef(nodeRef)) {

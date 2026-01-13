@@ -12,13 +12,16 @@ import { isRef } from "../types/refs.js";
 
 /**
  * Generate Anthropic tool definitions for a node.
- * Includes: updateState, transition tools, charter tools, and node tools.
+ * Includes: updateState, transition tools, current node tools, ancestor tools, and charter tools.
+ * Child tools shadow parent tools (closest match wins).
  */
-export function generateToolDefinitions<R, S>(
-  charter: Charter<R>,
+export function generateToolDefinitions<S>(
+  charter: Charter,
   node: Node<S>,
+  ancestorNodes: Node<unknown>[] = [],
 ): AnthropicToolDefinition[] {
   const tools: AnthropicToolDefinition[] = [];
+  const seenNames = new Set<string>();
 
   // 1. Add updateState tool
   const stateSchema = z.toJSONSchema(node.validator, { target: "openapi-3.0" });
@@ -34,6 +37,7 @@ export function generateToolDefinitions<R, S>(
       required: ["patch"],
     },
   });
+  seenNames.add("updateState");
 
   // 2. Add transition tools
   const transitionsWithoutArgs: string[] = [];
@@ -82,12 +86,14 @@ export function generateToolDefinitions<R, S>(
         required: ["to", "reason"],
       },
     });
+    seenNames.add("transition");
   }
 
   // Add named transition tools
   for (const t of transitionsWithArgs) {
+    const toolName = `transition_${t.name}`;
     tools.push({
-      name: `transition_${t.name}`,
+      name: toolName,
       description: t.description,
       input_schema: {
         type: "object",
@@ -101,22 +107,12 @@ export function generateToolDefinitions<R, S>(
         required: ["reason", ...Object.keys(t.argsSchema)],
       },
     });
+    seenNames.add(toolName);
   }
 
-  // 3. Add all charter tools (root state access)
-  for (const [name, tool] of Object.entries(charter.tools)) {
-    const inputSchema = z.toJSONSchema(tool.inputSchema, {
-      target: "openapi-3.0",
-    });
-    tools.push({
-      name: tool.name,
-      description: tool.description,
-      input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
-    });
-  }
-
-  // 4. Add inline node tools (node state access)
+  // 3. Add current node's tools (highest priority - added first to seenNames)
   for (const [name, tool] of Object.entries(node.tools)) {
+    if (seenNames.has(name)) continue;
     const inputSchema = z.toJSONSchema(tool.inputSchema, {
       target: "openapi-3.0",
     });
@@ -125,6 +121,40 @@ export function generateToolDefinitions<R, S>(
       description: tool.description,
       input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
     });
+    seenNames.add(name);
+  }
+
+  // 4. Add ancestor tools (from nearest to farthest)
+  // Reverse so nearest ancestors are processed first
+  for (let i = ancestorNodes.length - 1; i >= 0; i--) {
+    const ancestorNode = ancestorNodes[i];
+    if (!ancestorNode) continue;
+    for (const [name, tool] of Object.entries(ancestorNode.tools)) {
+      if (seenNames.has(name)) continue; // Child already has this tool
+      const inputSchema = z.toJSONSchema(tool.inputSchema, {
+        target: "openapi-3.0",
+      });
+      tools.push({
+        name,
+        description: tool.description,
+        input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
+      });
+      seenNames.add(name);
+    }
+  }
+
+  // 5. Add charter tools (lowest priority)
+  for (const [name, tool] of Object.entries(charter.tools)) {
+    if (seenNames.has(name)) continue; // Node/ancestor already has this tool
+    const inputSchema = z.toJSONSchema(tool.inputSchema, {
+      target: "openapi-3.0",
+    });
+    tools.push({
+      name,
+      description: tool.description,
+      input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
+    });
+    seenNames.add(name);
   }
 
   return tools;
@@ -133,8 +163,8 @@ export function generateToolDefinitions<R, S>(
 /**
  * Resolve a transition reference to the actual transition.
  */
-function resolveTransition<R, S>(
-  charter: Charter<R>,
+function resolveTransition<S>(
+  charter: Charter,
   transition: Transition<S>,
 ): Transition<S> {
   if (isRef(transition)) {

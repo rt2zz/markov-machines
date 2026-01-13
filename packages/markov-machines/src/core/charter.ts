@@ -1,28 +1,21 @@
-import { z } from "zod";
 import type { Charter, CharterConfig } from "../types/charter.js";
-
-// Default empty root state validator
-const defaultRootValidator = z.object({}).passthrough();
 
 /**
  * Create a new charter instance.
- * A charter is the registry of tools, transitions, and nodes.
+ * A charter is a static registry of executors, tools, transitions, and nodes.
+ * It has no state - state lives in NodeInstances.
  */
-export function createCharter<R = Record<string, never>>(
-  config: CharterConfig<R>,
-): Charter<R> {
+export function createCharter(config: CharterConfig): Charter {
   const {
     name,
-    executor,
+    executors = {},
     tools = {},
     transitions = {},
     nodes = {},
     config: modelConfig,
-    rootValidator,
-    initialRootState,
   } = config;
 
-  // Validate charter tool names match keys
+  // Validate tool names match keys
   for (const [key, tool] of Object.entries(tools)) {
     if (tool.name !== key) {
       throw new Error(
@@ -31,29 +24,21 @@ export function createCharter<R = Record<string, never>>(
     }
   }
 
-  // Use provided rootValidator or default to empty object
-  const resolvedRootValidator = (rootValidator ??
-    defaultRootValidator) as z.ZodType<R>;
-  const resolvedInitialRootState = (initialRootState ?? {}) as R;
-
-  // Validate initial root state
-  const rootParseResult = resolvedRootValidator.safeParse(
-    resolvedInitialRootState,
-  );
-  if (!rootParseResult.success) {
-    throw new Error(
-      `Invalid initial root state: ${rootParseResult.error.message}`,
-    );
+  // Validate executor types
+  for (const [key, executor] of Object.entries(executors)) {
+    if (!executor.type) {
+      throw new Error(
+        `Executor "${key}" is missing type property`,
+      );
+    }
   }
 
   return {
     name,
-    executor,
+    executors,
     tools,
     transitions,
     nodes,
     config: modelConfig,
-    rootValidator: resolvedRootValidator,
-    initialRootState: rootParseResult.data,
   };
 }

@@ -1,38 +1,43 @@
 import type { z } from "zod";
+import type { Ref } from "./refs.js";
 import type { Transition } from "./transitions.js";
-import type { AnyNodeToolDefinition } from "./tools.js";
+import type { AnyToolDefinition } from "./tools.js";
 
 /**
  * Node configuration for createNode.
  * S is the node's state type.
  */
 export interface NodeConfig<S = unknown> {
+  /** Reference to executor in charter.executors */
+  executor: Ref;
   instructions: string;
-  /** Inline node tools (node state access) */
-  tools?: Record<string, AnyNodeToolDefinition<S>>;
+  /** Node tools (state access via context) */
+  tools?: Record<string, AnyToolDefinition<S>>;
   validator: z.ZodType<S>;
   /** Transitions see node state S */
-  transitions: Record<string, Transition<S>>;
-  /** Optional initial state for this node, used when transitioning with state: undefined */
+  transitions?: Record<string, Transition<S>>;
+  /** Optional initial state for this node */
   initialState?: S;
 }
 
 /**
  * Runtime node instance.
- * S is the node's state type. Node has no knowledge of Charter or root state.
+ * S is the node's state type. Node has no knowledge of Charter.
  */
 export interface Node<S = unknown> {
   /** Unique identifier for this node instance */
   id: string;
+  /** Reference to executor in charter.executors */
+  executor: Ref;
   /** Instructions for the agent in this node */
   instructions: string;
-  /** Inline node tools (node state access) */
-  tools: Record<string, AnyNodeToolDefinition<S>>;
+  /** Node tools (state access via context) */
+  tools: Record<string, AnyToolDefinition<S>>;
   /** Zod schema for validating state */
   validator: z.ZodType<S>;
   /** Available transitions from this node (see node state S) */
   transitions: Record<string, Transition<S>>;
-  /** Optional initial state for this node, used when transitioning with state: undefined */
+  /** Optional initial state for this node */
   initialState?: S;
 }
 
@@ -44,6 +49,7 @@ export function isNode<S>(value: unknown): value is Node<S> {
     typeof value === "object" &&
     value !== null &&
     "id" in value &&
+    "executor" in value &&
     "instructions" in value &&
     "tools" in value &&
     "validator" in value &&

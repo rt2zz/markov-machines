@@ -2,18 +2,22 @@ import { z } from "zod";
 import {
   createCharter,
   createNode,
-  StandardExecutor,
+  createStandardExecutor,
+  createVesselExecutor,
   type Charter,
   type Node,
   type CodeTransition,
 } from "markov-machines";
-import { todoTools, type TodoState, type ArchiveState } from "./tools";
-
-// Create executor - API key from environment
-const executor = new StandardExecutor({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  model: "claude-sonnet-4-20250514",
-});
+import {
+  listTodos,
+  addTodo,
+  completeTodo,
+  deleteTodo,
+  listArchivedTodos,
+  clearArchive,
+  type TodoState,
+  type ArchiveState,
+} from "./tools";
 
 // State validators
 export const todoStateValidator = z.object({
@@ -37,41 +41,37 @@ export const archiveStateValidator = z.object({
 });
 
 // Forward declarations for nodes (needed for transitions)
-// Using 'any' since nodes have different state types
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let mainNode: Node<any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let archiveNode: Node<any>;
+let mainNode: Node<TodoState>;
+let archiveNode: Node<ArchiveState>;
 
-// Transitions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const toArchive: CodeTransition<any> = {
+// Transitions - use type assertions for cross-state transitions
+const toArchive: CodeTransition<TodoState> = {
   description: "View the archive of completed todos",
   execute: (state: TodoState) => ({
-    node: archiveNode,
+    node: archiveNode as Node<unknown>,
     state: {
       archivedTodos: state.todos.filter((t) => t.completed),
     },
   }),
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const backToMain: CodeTransition<any> = {
+const backToMain: CodeTransition<ArchiveState> = {
   description: "Return to the main todo list",
   execute: () => ({
-    node: mainNode,
+    node: mainNode as Node<unknown>,
     state: undefined, // Use mainNode's initialState
   }),
 };
 
-// Create charter with tools and transitions
-// Using 'any' for charter type since it handles multiple state types
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const todoCharter: Charter<any> = createCharter({
+// Create charter with executors registry
+export const todoCharter: Charter = createCharter({
   name: "todo-assistant",
-  executor,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tools: todoTools as any,
+  executors: {
+    standard: createStandardExecutor({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      model: "claude-sonnet-4-20250514",
+    }),
+  },
   transitions: {
     toArchive,
     backToMain,
@@ -82,8 +82,9 @@ export const todoCharter: Charter<any> = createCharter({
   },
 });
 
-// Create main node
-mainNode = createNode(todoCharter, {
+// Create main node - tools are now inline on the node
+mainNode = createNode<TodoState>({
+  executor: { ref: "standard" },
   instructions: `You are a helpful todo assistant. Help users manage their todos.
 
 Available actions:
@@ -97,12 +98,12 @@ You can also transition to the archive to view completed todos.
 When listing todos, always show the ID so users can reference them.
 Always confirm actions with the user after completing them.
 Be concise and helpful.`,
-  tools: [
-    { ref: "listTodos" },
-    { ref: "addTodo" },
-    { ref: "completeTodo" },
-    { ref: "deleteTodo" },
-  ],
+  tools: {
+    listTodos,
+    addTodo,
+    completeTodo,
+    deleteTodo,
+  },
   validator: todoStateValidator,
   transitions: {
     toArchive: { ref: "toArchive" },
@@ -111,7 +112,8 @@ Be concise and helpful.`,
 });
 
 // Create archive node
-archiveNode = createNode(todoCharter, {
+archiveNode = createNode<ArchiveState>({
+  executor: { ref: "standard" },
   instructions: `You are viewing the archive of completed todos.
 
 Available actions:
@@ -121,10 +123,10 @@ Available actions:
 You can transition back to the main todo list when done.
 
 Be concise and helpful.`,
-  tools: [
-    { ref: "listArchivedTodos" },
-    { ref: "clearArchive" },
-  ],
+  tools: {
+    listArchivedTodos,
+    clearArchive,
+  },
   validator: archiveStateValidator,
   transitions: {
     backToMain: { ref: "backToMain" },

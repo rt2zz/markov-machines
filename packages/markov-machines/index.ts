@@ -6,13 +6,20 @@ export { createTransition } from "./src/core/transition.js";
 export type { TransitionConfig } from "./src/core/transition.js";
 export { runMachine } from "./src/core/run.js";
 
-// Executor
-export { StandardExecutor } from "./src/executor/standard.js";
-export type { Executor, StandardExecutorConfig } from "./src/executor/types.js";
+// Executors
+export { StandardExecutor, createStandardExecutor } from "./src/executor/standard.js";
+export { VesselExecutor, createVesselExecutor } from "./src/executor/vessel.js";
+export type {
+  Executor,
+  StandardExecutorConfig,
+  VesselExecutorConfig,
+  RunOptions,
+  RunResult,
+} from "./src/executor/types.js";
 
 // Serialization
-export { serializeNode, serializeMachine } from "./src/serialization/serialize.js";
-export { deserializeMachine, deserializeNode } from "./src/serialization/deserialize.js";
+export { serializeNode, serializeInstance, serializeMachine } from "./src/serialization/serialize.js";
+export { deserializeMachine, deserializeInstance, deserializeNode } from "./src/serialization/deserialize.js";
 
 // Types
 export type {
@@ -20,15 +27,16 @@ export type {
   Charter,
   CharterConfig,
   ModelConfig,
-  RunOptions,
-  RunResult,
   // Node
   Node,
   NodeConfig,
+  // Instance
+  NodeInstance,
   // Machine
   Machine,
   MachineConfig,
   SerializedMachine,
+  SerializedInstance,
   // Refs
   Ref,
   SerialNode,
@@ -41,6 +49,11 @@ export type {
   TransitionContext,
   TransitionResult,
   // Tools
+  ToolContext,
+  ToolDefinition,
+  AnyToolDefinition,
+  AnthropicToolDefinition,
+  // Legacy tool aliases
   CharterToolContext,
   NodeToolContext,
   CharterToolDefinition,
@@ -62,6 +75,9 @@ export {
   isSerialNode,
   isSerialTransition,
   isNode,
+  isNodeInstance,
+  getLeafInstance,
+  getInstancePath,
   isCodeTransition,
   isGeneralTransition,
   transitionHasArguments,

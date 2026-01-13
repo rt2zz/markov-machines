@@ -6,8 +6,11 @@ import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
   runMachine,
-  serializeNode,
-  deserializeMachine,
+  createMachine,
+  serializeInstance,
+  deserializeInstance,
+  type NodeInstance,
+  type Node,
 } from "markov-machines";
 import { todoCharter, mainNode, createInitialState } from "../src/agent/charter";
 
@@ -17,21 +20,27 @@ export const send = action({
     message: v.string(),
   },
   handler: async (ctx, { sessionId, message }): Promise<string> => {
-    // Get session (now returns current sessionNode data)
+    // Get session
     const session = await ctx.runQuery(api.sessions.get, { id: sessionId });
     if (!session) {
       throw new Error("Session not found");
     }
 
-    // Reconstruct machine from persisted state
-    const machine = deserializeMachine(todoCharter, {
+    // Deserialize the instance from persisted state
+    const instance = deserializeInstance(todoCharter, {
       node: session.node,
       state: session.state,
+      child: undefined,
+    });
+
+    // Create machine
+    const machine = createMachine(todoCharter, {
+      instance,
       history: session.history,
     });
 
     // Store original node ID to detect transitions
-    const originalNodeId = machine.node.id;
+    const originalNodeId = machine.instance.node.id;
 
     // Add user message to UI
     await ctx.runMutation(api.messages.add, {
@@ -45,29 +54,33 @@ export const send = action({
     const newHistory = [...session.history, ...result.messages];
 
     // Check if a transition occurred (node changed)
-    const transitioned = result.node.id !== originalNodeId;
+    const transitioned = result.instance.node.id !== originalNodeId;
+
+    // Serialize the instance for storage
+    const serializedInstance = serializeInstance(result.instance, todoCharter);
 
     if (transitioned) {
       // Transition occurred - create new sessionNode
       await ctx.runMutation(api.sessions.transition, {
         sessionId,
-        node: serializeNode(result.node, todoCharter),
-        state: result.state,
-        reason: "Agent transitioned", // Could extract from transition tool call
+        node: serializedInstance.node,
+        state: serializedInstance.state,
+        reason: "Agent transitioned",
         history: newHistory,
       });
     } else {
       // Same node - just update state and history
       await ctx.runMutation(api.sessions.update, {
         sessionId,
-        state: result.state,
+        state: serializedInstance.state,
         history: newHistory,
       });
     }
 
     // Sync todos to Convex (if state has todos)
-    if (result.state && typeof result.state === "object" && "todos" in result.state) {
-      const todos = (result.state as { todos: Array<{ id: string; text: string; completed: boolean }> }).todos;
+    const currentState = result.instance.state;
+    if (currentState && typeof currentState === "object" && "todos" in currentState) {
+      const todos = (currentState as { todos: Array<{ id: string; text: string; completed: boolean }> }).todos;
       await ctx.runMutation(api.todos.sync, { todos });
     }
 
@@ -86,11 +99,19 @@ export const createSession = action({
   args: {},
   handler: async (ctx): Promise<Id<"sessions">> => {
     const initialState = createInitialState();
-    const serializedNode = serializeNode(mainNode, todoCharter);
+
+    // Create instance (cast needed for variance)
+    const instance: NodeInstance = {
+      node: mainNode as Node<unknown>,
+      state: initialState,
+    };
+
+    // Serialize for storage
+    const serializedInstance = serializeInstance(instance, todoCharter);
 
     const sessionId = await ctx.runMutation(api.sessions.create, {
-      node: serializedNode,
-      state: initialState,
+      node: serializedInstance.node,
+      state: serializedInstance.state,
     });
 
     return sessionId;

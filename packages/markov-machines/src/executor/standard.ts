@@ -1,26 +1,25 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam, ContentBlock as AnthropicContentBlock } from "@anthropic-ai/sdk/resources/messages";
-import type { Machine } from "../types/machine.js";
+import type { Charter } from "../types/charter.js";
+import type { NodeInstance } from "../types/instance.js";
 import type { Node } from "../types/node.js";
-import type { RunOptions, RunResult } from "../types/charter.js";
 import type { Message, ContentBlock, ToolResultBlock } from "../types/messages.js";
 import type { Transition } from "../types/transitions.js";
 import { userMessage, assistantMessage, toolResult, getMessageText } from "../types/messages.js";
 import { generateToolDefinitions } from "../tools/tool-generator.js";
 import { updateState } from "../runtime/state-manager.js";
-import {
-  executeCharterTool,
-  executeNodeTool,
-} from "../runtime/tool-executor.js";
+import { executeTool } from "../runtime/tool-executor.js";
 import { executeTransition } from "../runtime/transition-executor.js";
-import { isRef } from "../types/refs.js";
-import type { Executor, StandardExecutorConfig } from "./types.js";
+import { resolveTool, collectAvailableTools } from "../runtime/ref-resolver.js";
+import type { Executor, StandardExecutorConfig, RunOptions, RunResult } from "./types.js";
 
 /**
  * Standard executor implementation using Anthropic SDK.
  * Implements the agentic loop with tool calls until text response.
+ * Does NOT support children - this is a leaf executor.
  */
 export class StandardExecutor implements Executor {
+  type = "standard" as const;
   private client: Anthropic;
   private defaultModel: string;
 
@@ -31,47 +30,50 @@ export class StandardExecutor implements Executor {
     this.defaultModel = config.model ?? "claude-sonnet-4-20250514";
   }
 
-  async run<R, S>(
-    machine: Machine<R, S>,
+  async run(
+    charter: Charter,
+    instance: NodeInstance,
+    ancestors: NodeInstance[],
     input: string,
     options?: RunOptions,
-  ): Promise<RunResult<R, S>> {
+  ): Promise<RunResult> {
     const maxTurns = options?.maxTurns ?? 50;
-    let currentState = machine.state;
-    let currentRootState = machine.rootState;
-    let currentNode = machine.node;
+    let currentState = instance.state;
+    let currentNode = instance.node;
     const newMessages: Message[] = [];
+
+    // Build ancestor state map for tool execution
+    // We'll need to track which ancestors have been updated
+    const ancestorStates = new Map<NodeInstance, unknown>();
+    for (const ancestor of ancestors) {
+      ancestorStates.set(ancestor, ancestor.state);
+    }
 
     // Add user input message
     newMessages.push(userMessage(input));
 
     // Build conversation history for API
+    // Note: We don't have access to machine.history here, caller should handle that
     const conversationHistory: MessageParam[] = [
-      ...this.convertToAnthropicMessages(machine.history),
       { role: "user", content: input },
     ];
 
     let turns = 0;
-    let stopReason: "end_turn" | "max_tokens" = "end_turn";
+    let stopReason: "end_turn" | "max_tokens" | "delegated" = "end_turn";
 
     while (turns < maxTurns) {
       turns++;
 
-      // Generate tools for current node
-      const tools = generateToolDefinitions(machine.charter, currentNode);
+      // Generate tools for current node (includes ancestor tools)
+      const tools = generateToolDefinitions(charter, currentNode, ancestors.map(a => a.node));
 
       // Build system prompt
-      const systemPrompt = this.buildSystemPrompt(
-        currentNode,
-        currentRootState,
-        currentState,
-      );
+      const systemPrompt = this.buildSystemPrompt(currentNode, currentState, ancestors);
 
       // Call Claude API
-      console.log('create message', process.env.ANTHROPIC_API_KEY)
       const response = await this.client.messages.create({
-        model: machine.charter.config.model ?? this.defaultModel,
-        max_tokens: machine.charter.config.maxTokens ?? 4096,
+        model: charter.config.model ?? this.defaultModel,
+        max_tokens: charter.config.maxTokens ?? 4096,
         system: systemPrompt,
         messages: conversationHistory,
         tools: tools.map((t) => ({
@@ -117,7 +119,7 @@ export class StandardExecutor implements Executor {
 
           // Handle updateState
           if (name === "updateState") {
-            const patch = (toolInput as { patch: Partial<S> }).patch;
+            const patch = (toolInput as { patch: Partial<unknown> }).patch;
             const result = updateState(currentState, patch, currentNode.validator);
 
             if (result.success) {
@@ -167,47 +169,53 @@ export class StandardExecutor implements Executor {
             continue;
           }
 
-          // Check if this is a charter tool (defined on charter)
-          if (name in machine.charter.tools) {
-            // Execute charter tool (root state access only)
-            const { result: toolResultStr, isError } = await executeCharterTool(
-              machine.charter,
-              name,
-              toolInput,
-              currentRootState,
-              (patch) => {
-                const updateResult = updateState(
-                  currentRootState,
-                  patch,
-                  machine.charter.rootValidator,
-                );
-                if (updateResult.success) {
-                  currentRootState = updateResult.state;
-                }
-              },
-            );
-            toolResults.push(toolResult(id, toolResultStr, isError));
-            continue;
-          }
+          // Resolve and execute tool (walks up ancestor tree)
+          const resolved = resolveTool(charter, { node: currentNode, state: currentState }, ancestors, name);
 
-          // Check if this is a node tool (defined inline on node)
-          if (name in currentNode.tools) {
-            // Execute node tool (node state access only)
-            const { result: toolResultStr, isError } = await executeNodeTool(
-              currentNode,
-              name,
-              toolInput,
-              currentState,
-              (patch) => {
-                const updateResult = updateState(
-                  currentState,
-                  patch,
-                  currentNode.validator,
-                );
-                if (updateResult.success) {
-                  currentState = updateResult.state;
+          if (resolved) {
+            const { tool, owner } = resolved;
+
+            // Determine which state to use and how to update it
+            let toolState: unknown;
+            let onUpdate: (patch: Partial<unknown>) => void;
+
+            if (owner === "charter") {
+              // Charter tools don't have state access in new architecture
+              // They operate statelessly or we need a different approach
+              // For now, give them access to current node state
+              toolState = currentState;
+              onUpdate = (patch) => {
+                const result = updateState(currentState, patch, currentNode.validator);
+                if (result.success) {
+                  currentState = result.state;
                 }
-              },
+              };
+            } else if (owner === instance || owner.node.id === currentNode.id) {
+              // Current node's tool
+              toolState = currentState;
+              onUpdate = (patch) => {
+                const result = updateState(currentState, patch, currentNode.validator);
+                if (result.success) {
+                  currentState = result.state;
+                }
+              };
+            } else {
+              // Ancestor tool - use and update ancestor's state
+              toolState = ancestorStates.get(owner) ?? owner.state;
+              onUpdate = (patch) => {
+                const ownerState = ancestorStates.get(owner) ?? owner.state;
+                const result = updateState(ownerState, patch, owner.node.validator);
+                if (result.success) {
+                  ancestorStates.set(owner, result.state);
+                }
+              };
+            }
+
+            const { result: toolResultStr, isError } = await executeTool(
+              tool,
+              toolInput,
+              toolState,
+              onUpdate,
             );
             toolResults.push(toolResult(id, toolResultStr, isError));
             continue;
@@ -239,24 +247,19 @@ export class StandardExecutor implements Executor {
             throw new Error(`Unknown transition: ${queuedTransition.name}`);
           }
 
-          // Determine which state to pass based on whether it's a charter or node transition
-          // Ref transitions are charter-level (pass rootState), inline transitions are node-level (pass nodeState)
-          const isCharterTransition = isRef(transition);
-          const stateForTransition = isCharterTransition ? currentRootState : currentState;
-
           const result = await executeTransition(
-            machine.charter,
+            charter,
             transition as Transition<unknown>,
-            stateForTransition,
+            currentState,
             queuedTransition.reason,
             queuedTransition.args,
           );
 
-          currentNode = result.node as Node<S>;
+          currentNode = result.node as Node<unknown>;
 
           // Update state: use returned state, or node's initialState, or throw
           if (result.state !== undefined) {
-            currentState = result.state as S;
+            currentState = result.state;
           } else if (currentNode.initialState !== undefined) {
             currentState = currentNode.initialState;
           } else {
@@ -272,41 +275,76 @@ export class StandardExecutor implements Executor {
     const lastMessage = newMessages[newMessages.length - 1];
     const response = lastMessage ? getMessageText(lastMessage) : "";
 
+    // Build updated instance with any ancestor state changes
+    const updatedInstance = this.buildUpdatedInstance(
+      instance,
+      currentNode,
+      currentState,
+      ancestors,
+      ancestorStates,
+    );
+
     return {
       response,
-      state: currentState,
-      rootState: currentRootState,
-      node: currentNode,
+      instance: updatedInstance,
       messages: newMessages,
       stopReason,
     };
   }
 
   /**
+   * Build updated instance, propagating ancestor state changes.
+   */
+  private buildUpdatedInstance(
+    originalInstance: NodeInstance,
+    currentNode: Node<unknown>,
+    currentState: unknown,
+    ancestors: NodeInstance[],
+    ancestorStates: Map<NodeInstance, unknown>,
+  ): NodeInstance {
+    // For now, just update the leaf instance
+    // TODO: Properly propagate ancestor state changes up the tree
+    return {
+      node: currentNode,
+      state: currentState,
+      child: originalInstance.child,
+    };
+  }
+
+  /**
    * Build system prompt for the current node.
    */
-  protected buildSystemPrompt<R, S>(
+  protected buildSystemPrompt<S>(
     node: Node<S>,
-    rootState: R,
     state: S,
+    ancestors: NodeInstance[],
   ): string {
-    return `${node.instructions}
-
-${this.buildRootStateSection(rootState)}
+    let prompt = `${node.instructions}
 
 ${this.buildStateSection(state)}
 
 ${this.buildTransitionsSection(node.transitions)}`;
+
+    // Add ancestor context if any
+    if (ancestors.length > 0) {
+      prompt += `\n\n${this.buildAncestorContext(ancestors)}`;
+    }
+
+    return prompt;
   }
 
   /**
-   * Build the root state section of the system prompt.
+   * Build ancestor context section.
    */
-  protected buildRootStateSection<R>(rootState: R): string {
-    return `## Root State (persists across transitions)
-\`\`\`json
-${JSON.stringify(rootState, null, 2)}
-\`\`\``;
+  protected buildAncestorContext(ancestors: NodeInstance[]): string {
+    const sections = ancestors.map((ancestor, i) => {
+      const depth = ancestors.length - i;
+      return `### Ancestor ${depth}: ${ancestor.node.instructions.slice(0, 100)}...
+State: ${JSON.stringify(ancestor.state, null, 2)}`;
+    });
+
+    return `## Ancestor Context
+${sections.join("\n\n")}`;
   }
 
   /**
@@ -340,43 +378,6 @@ ${transitionList || "None"}`;
   }
 
   /**
-   * Convert our Message format to Anthropic MessageParam format.
-   */
-  private convertToAnthropicMessages(messages: Message[]): MessageParam[] {
-    return messages.map((msg) => ({
-      role: msg.role,
-      content:
-        typeof msg.content === "string"
-          ? msg.content
-          : (msg.content.map((block) => {
-            if (block.type === "text") {
-              return { type: "text" as const, text: block.text };
-            }
-            if (block.type === "tool_use") {
-              return {
-                type: "tool_use" as const,
-                id: block.id,
-                name: block.name,
-                input: block.input,
-              };
-            }
-            if (block.type === "tool_result") {
-              return {
-                type: "tool_result" as const,
-                tool_use_id: block.tool_use_id,
-                content: block.content,
-                is_error: block.is_error,
-              };
-            }
-            if (block.type === "thinking") {
-              return { type: "text" as const, text: `[Thinking: ${block.thinking}]` };
-            }
-            return { type: "text" as const, text: JSON.stringify(block) };
-          }) as MessageParam["content"]),
-    }));
-  }
-
-  /**
    * Convert Anthropic content blocks to our format.
    */
   private convertContentBlocks(
@@ -405,4 +406,11 @@ ${transitionList || "None"}`;
       return { type: "text", text: JSON.stringify(block) };
     });
   }
+}
+
+/**
+ * Create a standard executor instance.
+ */
+export function createStandardExecutor(config?: StandardExecutorConfig): StandardExecutor {
+  return new StandardExecutor(config);
 }

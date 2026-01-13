@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Node } from "../types/node.js";
-import type { Machine, SerializedMachine } from "../types/machine.js";
+import type { NodeInstance } from "../types/instance.js";
+import type { Machine, SerializedMachine, SerializedInstance } from "../types/machine.js";
 import type { Ref, SerialNode, SerialTransition } from "../types/refs.js";
 import type { Charter } from "../types/charter.js";
 import type { Transition } from "../types/transitions.js";
@@ -12,9 +13,9 @@ import { isCodeTransition, isGeneralTransition } from "../types/transitions.js";
  * If the node is registered in the charter, returns a Ref.
  * Otherwise, serializes the full node.
  */
-export function serializeNode<R, S>(
+export function serializeNode<S>(
   node: Node<S>,
-  charter?: Charter<R>,
+  charter?: Charter,
 ): SerialNode<S> | Ref {
   // Check if this node is registered in the charter
   if (charter) {
@@ -44,6 +45,7 @@ export function serializeNode<R, S>(
   }
 
   return {
+    executor: node.executor,
     instructions: node.instructions,
     validator,
     transitions,
@@ -54,9 +56,9 @@ export function serializeNode<R, S>(
 /**
  * Serialize a transition to a Ref or inline definition.
  */
-function serializeTransition<R, S>(
+function serializeTransition<S>(
   transition: Transition<S>,
-  charter?: Charter<R>,
+  charter?: Charter,
 ): Ref | SerialNode {
   // If it's already a ref, keep it
   if (isRef(transition)) {
@@ -93,15 +95,31 @@ function serializeTransition<R, S>(
 }
 
 /**
+ * Serialize a node instance to a SerializedInstance.
+ */
+export function serializeInstance(
+  instance: NodeInstance,
+  charter?: Charter,
+): SerializedInstance {
+  const serializedNode = serializeNode(instance.node, charter);
+
+  return {
+    node: serializedNode,
+    state: instance.state,
+    child: instance.child
+      ? serializeInstance(instance.child, charter)
+      : undefined,
+  };
+}
+
+/**
  * Serialize a machine for persistence.
  */
-export function serializeMachine<R, S>(
-  machine: Machine<R, S>,
-): SerializedMachine<R, S> {
+export function serializeMachine(
+  machine: Machine,
+): SerializedMachine {
   return {
-    node: serializeNode(machine.node, machine.charter),
-    state: machine.state,
-    rootState: machine.rootState,
+    instance: serializeInstance(machine.instance, machine.charter),
     history: machine.history,
   };
 }

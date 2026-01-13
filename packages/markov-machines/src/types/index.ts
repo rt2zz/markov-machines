@@ -4,13 +4,17 @@ export { isRef, isSerialNode, isSerialTransition } from "./refs.js";
 
 // Tools
 export type {
+  ToolContext,
+  ToolDefinition,
+  AnyToolDefinition,
+  AnthropicToolDefinition,
+  // Legacy aliases
   CharterToolContext,
   NodeToolContext,
   CharterToolDefinition,
   NodeToolDefinition,
   AnyCharterToolDefinition,
   AnyNodeToolDefinition,
-  AnthropicToolDefinition,
 } from "./tools.js";
 
 // Transitions
@@ -36,14 +40,15 @@ export { deepMerge } from "./state.js";
 export type { Node, NodeConfig } from "./node.js";
 export { isNode } from "./node.js";
 
+// Instance
+export type { NodeInstance } from "./instance.js";
+export { isNodeInstance, getLeafInstance, getInstancePath } from "./instance.js";
+
 // Charter
 export type {
   Charter,
   CharterConfig,
   ModelConfig,
-  Executor,
-  RunOptions,
-  RunResult,
 } from "./charter.js";
 
 // Messages
@@ -63,4 +68,4 @@ export {
 } from "./messages.js";
 
 // Machine
-export type { Machine, MachineConfig, SerializedMachine } from "./machine.js";
+export type { Machine, MachineConfig, SerializedMachine, SerializedInstance } from "./machine.js";
