@@ -11,7 +11,7 @@ export default defineSchema({
 
   // Sessions table - tracks current position and flat history
   sessions: defineTable({
-    currentNodeId: v.id("sessionNodes"), // Points to current sessionNode
+    currentNodeId: v.optional(v.id("sessionNodes")), // Points to current sessionNode (optional during creation)
     history: v.array(v.any()), // Message[] - flat history across all nodes
   }),
 

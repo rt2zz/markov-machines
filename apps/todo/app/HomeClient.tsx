@@ -19,21 +19,36 @@ export function HomeClient({
 
   const createSession = useAction(api.chat.createSession);
   const sendMessage = useAction(api.chat.send);
+  const session = useQuery(
+    api.sessions.get,
+    sessionId ? { id: sessionId } : "skip"
+  );
   const messages = useQuery(
     api.messages.list,
     sessionId ? { sessionId } : "skip"
   );
   const todos = useQuery(api.todos.list);
 
-  // Create session on mount if none exists
+  // Create session on mount if none exists or if stale
   useEffect(() => {
-    if (sessionId) return;
-    async function init() {
-      const id = await createSession();
-      setSessionId(id);
+    // Wait for session query to resolve
+    if (sessionId && session === undefined) return; // Still loading
+
+    // If we have a sessionId but session is null, it's stale - clear it
+    if (sessionId && session === null) {
+      setSessionId(null);
+      return;
     }
-    init();
-  }, [sessionId, createSession, setSessionId]);
+
+    // If no sessionId, create a new session
+    if (!sessionId) {
+      async function init() {
+        const id = await createSession();
+        setSessionId(id);
+      }
+      init();
+    }
+  }, [sessionId, session, createSession, setSessionId]);
 
   // Scroll to bottom on new messages
   useEffect(() => {

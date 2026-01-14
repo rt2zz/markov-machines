@@ -83,10 +83,18 @@ export class StandardExecutor implements Executor {
     // Add user input message
     newMessages.push(userMessage(input));
 
-    // Build conversation history for API
-    const conversationHistory: MessageParam[] = [
-      { role: "user", content: input },
-    ];
+    // Build conversation history for API, including previous history
+    const conversationHistory: MessageParam[] = [];
+
+    // Add previous history if provided
+    if (options?.history) {
+      for (const msg of options.history) {
+        conversationHistory.push(this.convertMessageToParam(msg));
+      }
+    }
+
+    // Add current user input
+    conversationHistory.push({ role: "user", content: input });
 
     let turns = 0;
     let stopReason: "end_turn" | "max_tokens" | "yield" = "end_turn";
@@ -263,6 +271,11 @@ export class StandardExecutor implements Executor {
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 toolResults.push(toolResult(id, `Tool error: ${errorMsg}`, true));
               }
+              continue;
+            }
+
+            // Skip Anthropic builtin tools (handled server-side)
+            if (isAnthropicBuiltinTool(tool)) {
               continue;
             }
 
@@ -574,6 +587,42 @@ ${transitionList || "None"}`;
       // Fallback
       return { type: "text", text: JSON.stringify(block) };
     });
+  }
+
+  /**
+   * Convert our Message format to Anthropic MessageParam format.
+   */
+  private convertMessageToParam(msg: Message): MessageParam {
+    if (typeof msg.content === "string") {
+      return { role: msg.role, content: msg.content };
+    }
+
+    // Convert our ContentBlock[] to Anthropic's format
+    const content = msg.content.map((block) => {
+      if (block.type === "text") {
+        return { type: "text" as const, text: block.text };
+      }
+      if (block.type === "tool_use") {
+        return {
+          type: "tool_use" as const,
+          id: block.id,
+          name: block.name,
+          input: block.input,
+        };
+      }
+      if (block.type === "tool_result") {
+        return {
+          type: "tool_result" as const,
+          tool_use_id: block.tool_use_id,
+          content: block.content,
+          ...(block.is_error !== undefined && { is_error: block.is_error }),
+        };
+      }
+      // Thinking blocks - skip or convert
+      return { type: "text" as const, text: "" };
+    }).filter((b) => b.type !== "text" || b.text !== "");
+
+    return { role: msg.role, content };
   }
 }
 

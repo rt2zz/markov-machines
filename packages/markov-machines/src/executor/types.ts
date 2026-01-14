@@ -7,6 +7,8 @@ import type { Message } from "../types/messages.js";
  */
 export interface RunOptions {
   maxTurns?: number;
+  /** Previous conversation history to include */
+  history?: Message[];
 }
 
 /**

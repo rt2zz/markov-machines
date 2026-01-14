@@ -140,6 +140,14 @@ export function generateToolDefinitions<S>(
     if (!ancestorNode) continue;
     for (const [name, tool] of Object.entries(ancestorNode.tools)) {
       if (seenNames.has(name)) continue; // Child already has this tool
+
+      // Handle Anthropic built-in tools (server-side)
+      if (isAnthropicBuiltinTool(tool)) {
+        tools.push({ type: tool.builtinType } as unknown as AnthropicToolDefinition);
+        seenNames.add(name);
+        continue;
+      }
+
       const inputSchema = z.toJSONSchema(tool.inputSchema, {
         target: "openapi-3.0",
       });

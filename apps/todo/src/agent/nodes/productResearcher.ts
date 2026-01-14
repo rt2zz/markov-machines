@@ -1,8 +1,8 @@
 import { z } from "zod";
 import {
   createNode,
-  createTransition,
   type AnthropicBuiltinTool,
+  type CodeTransition,
 } from "markov-machines";
 import { guidancePack } from "../packs/guidance";
 
@@ -17,6 +17,17 @@ const researcherStateValidator = z.object({
 });
 
 export type ResearcherState = z.infer<typeof researcherStateValidator>;
+
+// Transition to yield results back to parent
+export const yieldResults: CodeTransition<ResearcherState> = {
+  description: "Return findings to the main assistant. Use when research is complete or you need user input.",
+  execute: async (state, _ctx, { yield: yieldFn }) => {
+    return yieldFn({
+      query: state.query,
+      findings: state.findings,
+    });
+  },
+};
 
 // Anthropic's built-in web search tool
 const webSearchTool: AnthropicBuiltinTool = {
@@ -55,15 +66,7 @@ Be thorough but focused. Prioritize findings that match the user's preferences f
     },
   },
   transitions: {
-    yieldResults: createTransition<ResearcherState>({
-      description: "Return findings to the main assistant. Use when research is complete or you need user input.",
-      execute: async (state, _reason, _args, { yield: yieldFn }) => {
-        return yieldFn({
-          query: state.query,
-          findings: state.findings,
-        });
-      },
-    }),
+    yieldResults: { ref: "yieldResults" },
   },
   packs: [guidancePack],
   initialState: { query: "", findings: [] },

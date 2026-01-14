@@ -28,6 +28,7 @@ export type {
   // Node
   Node,
   NodeConfig,
+  NodeToolEntry,
   // Instance
   Instance,
   // Machine

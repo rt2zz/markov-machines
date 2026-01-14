@@ -1,7 +1,12 @@
 import type { z } from "zod";
 import type { Transition } from "./transitions.js";
-import type { AnyToolDefinition } from "./tools.js";
+import type { AnyToolDefinition, AnthropicBuiltinTool } from "./tools.js";
 import type { Pack } from "./pack.js";
+
+/**
+ * Tool entry - either a regular tool definition or an Anthropic builtin tool.
+ */
+export type NodeToolEntry<S = unknown> = AnyToolDefinition<S> | AnthropicBuiltinTool;
 
 /**
  * Node configuration for createNode.
@@ -10,7 +15,7 @@ import type { Pack } from "./pack.js";
 export interface NodeConfig<S = unknown> {
   instructions: string;
   /** Node tools (state access via context) */
-  tools?: Record<string, AnyToolDefinition<S>>;
+  tools?: Record<string, NodeToolEntry<S>>;
   validator: z.ZodType<S>;
   /** Transitions see node state S */
   transitions?: Record<string, Transition<S>>;
@@ -31,7 +36,7 @@ export interface Node<S = unknown> {
   /** Instructions for the agent in this node */
   instructions: string;
   /** Node tools (state access via context) */
-  tools: Record<string, AnyToolDefinition<S>>;
+  tools: Record<string, NodeToolEntry<S>>;
   /** Zod schema for validating state */
   validator: z.ZodType<S>;
   /** Available transitions from this node (see node state S) */

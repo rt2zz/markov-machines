@@ -1,6 +1,7 @@
 "use node";
 
 import { v } from "convex/values";
+import { v4 as uuid } from "uuid";
 import { action } from "./_generated/server";
 import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
@@ -9,7 +10,8 @@ import {
   createMachine,
   serializeInstance,
   deserializeInstance,
-  type NodeInstance,
+  createInstance,
+  type Instance,
   type Node,
 } from "markov-machines";
 import { todoCharter, mainNode, createInitialState } from "../src/agent/charter";
@@ -28,6 +30,7 @@ export const send = action({
 
     // Deserialize the instance from persisted state
     const instance = deserializeInstance(todoCharter, {
+      id: uuid(), // Generate new ID since we don't persist it
       node: session.node,
       state: session.state,
       child: undefined,
@@ -100,11 +103,11 @@ export const createSession = action({
   handler: async (ctx): Promise<Id<"sessions">> => {
     const initialState = createInitialState();
 
-    // Create instance (cast needed for variance)
-    const instance: NodeInstance = {
-      node: mainNode as Node<unknown>,
-      state: initialState,
-    };
+    // Create instance
+    const instance: Instance = createInstance(
+      mainNode as Node<unknown>,
+      initialState,
+    );
 
     // Serialize for storage
     const serializedInstance = serializeInstance(instance, todoCharter);

@@ -13,7 +13,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     // Create session first (without currentNodeId - we'll update it)
     const sessionId = await ctx.db.insert("sessions", {
-      currentNodeId: "" as Id<"sessionNodes">, // Placeholder, will update
+      currentNodeId: undefined, // Will be set after creating sessionNode
       history: [],
     });
 
@@ -41,7 +41,7 @@ export const get = query({
   args: { id: v.id("sessions") },
   handler: async (ctx, { id }) => {
     const session = await ctx.db.get(id);
-    if (!session) return null;
+    if (!session || !session.currentNodeId) return null;
 
     const currentNode = await ctx.db.get(session.currentNodeId);
     if (!currentNode) return null;

@@ -19,7 +19,7 @@ import {
   type ArchiveState,
 } from "./tools";
 import { guidancePack } from "./packs/guidance";
-import { productResearcherNode } from "./nodes/productResearcher";
+import { productResearcherNode, yieldResults } from "./nodes/productResearcher";
 
 // State validators
 export const todoStateValidator = z.object({
@@ -50,6 +50,7 @@ let archiveNode: Node<ArchiveState>;
 const toArchive: CodeTransition<TodoState> = {
   description: "View the archive of completed todos",
   execute: (state: TodoState) => ({
+    type: "transition" as const,
     node: archiveNode as Node<unknown>,
     state: {
       archivedTodos: state.todos.filter((t) => t.completed),
@@ -60,9 +61,21 @@ const toArchive: CodeTransition<TodoState> = {
 const backToMain: CodeTransition<ArchiveState> = {
   description: "Return to the main todo list",
   execute: () => ({
+    type: "transition" as const,
     node: mainNode as Node<unknown>,
     state: undefined, // Use mainNode's initialState
   }),
+};
+
+const spawnResearcher: CodeTransition<TodoState> = {
+  description: "Spawn a product researcher to investigate a product. Use when user needs help researching something to buy.",
+  arguments: z.object({
+    query: z.string().describe("What to research (e.g., 'best wool blankets', 'durable hiking boots')"),
+  }),
+  execute: async (_state, ctx, { spawn }) => {
+    const args = ctx.args as { query: string };
+    return spawn(productResearcherNode, { query: args.query, findings: [] }) as ReturnType<typeof spawn>;
+  },
 };
 
 // Create charter with single executor
@@ -76,6 +89,8 @@ export const todoCharter: Charter = createCharter({
   transitions: {
     toArchive,
     backToMain,
+    spawnResearcher,
+    yieldResults,
   },
   packs: [guidancePack],
 });
@@ -107,18 +122,7 @@ Be concise and helpful.`,
   validator: todoStateValidator,
   transitions: {
     toArchive: { ref: "toArchive" },
-    spawnResearcher: createTransition<TodoState>({
-      description: "Spawn a product researcher to investigate a product. Use when user needs help researching something to buy.",
-      arguments: z.object({
-        query: z.string().describe("What to research (e.g., 'best wool blankets', 'durable hiking boots')"),
-      }),
-      execute: async (_state, _reason, args, { spawn }) => {
-        return spawn({
-          node: productResearcherNode,
-          state: { query: args.query, findings: [] },
-        });
-      },
-    }),
+    spawnResearcher: { ref: "spawnResearcher" },
   },
   packs: [guidancePack],
   initialState: { todos: [] },
@@ -145,6 +149,13 @@ Be concise and helpful.`,
   },
   initialState: { archivedTodos: [] },
 });
+
+// Register nodes in charter for serialization
+todoCharter.nodes = {
+  mainNode,
+  archiveNode,
+  productResearcherNode,
+};
 
 // Re-export for external use
 export { mainNode, archiveNode };

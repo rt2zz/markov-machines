@@ -77,13 +77,13 @@ export async function runMachine(
     throw new Error("No active instance found");
   }
 
-  // Run the active instance
+  // Run the active instance with history
   const result = await machine.charter.executor.run(
     machine.charter,
     activeInstance,
     ancestors,
     input,
-    options,
+    { ...options, history: machine.history },
   );
 
   // Rebuild the full tree with the updated active instance

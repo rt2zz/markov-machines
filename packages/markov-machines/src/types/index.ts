@@ -40,7 +40,7 @@ export type { StateUpdateResult } from "./state.js";
 export { deepMerge } from "./state.js";
 
 // Node
-export type { Node, NodeConfig } from "./node.js";
+export type { Node, NodeConfig, NodeToolEntry } from "./node.js";
 export { isNode } from "./node.js";
 
 // Instance
