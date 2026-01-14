@@ -1,8 +1,12 @@
 import type { Charter } from "../types/charter.js";
-import type { Machine, SerializedMachine, SerializedInstance } from "../types/machine.js";
-import type { NodeInstance } from "../types/instance.js";
-import { isRef } from "../types/refs.js";
-import { deserializeNode, resolveNodeRef } from "../runtime/transition-executor.js";
+import type {
+  Machine,
+  SerializedMachine,
+  SerializedInstance,
+} from "../types/machine.js";
+import type { Instance } from "../types/instance.js";
+import { resolveNodeRef } from "../runtime/transition-executor.js";
+export { deserializeNode } from "../runtime/transition-executor.js";
 
 /**
  * Deserialize a node instance from persisted state.
@@ -10,7 +14,7 @@ import { deserializeNode, resolveNodeRef } from "../runtime/transition-executor.
 export function deserializeInstance(
   charter: Charter,
   serialized: SerializedInstance,
-): NodeInstance {
+): Instance {
   // Resolve node
   const node = resolveNodeRef(charter, serialized.node);
 
@@ -20,15 +24,22 @@ export function deserializeInstance(
     throw new Error(`Invalid state: ${stateResult.error.message}`);
   }
 
-  // Recursively deserialize child
-  const child = serialized.child
-    ? deserializeInstance(charter, serialized.child)
-    : undefined;
+  // Recursively deserialize children
+  let child: Instance | Instance[] | undefined;
+  if (serialized.child) {
+    if (Array.isArray(serialized.child)) {
+      child = serialized.child.map((c) => deserializeInstance(charter, c));
+    } else {
+      child = deserializeInstance(charter, serialized.child);
+    }
+  }
 
   return {
+    id: serialized.id,
     node,
     state: stateResult.data,
     child,
+    ...(serialized.packStates ? { packStates: serialized.packStates } : {}),
   };
 }
 
@@ -46,8 +57,3 @@ export function deserializeMachine(
     history: serialized.history,
   };
 }
-
-/**
- * Re-export deserializeNode for convenience.
- */
-export { deserializeNode };

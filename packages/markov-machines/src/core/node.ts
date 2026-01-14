@@ -4,16 +4,15 @@ import type { Node, NodeConfig } from "../types/node.js";
 /**
  * Create a new node instance.
  * Node has no knowledge of Charter - it only knows about its own state type S.
- * The executor ref will be resolved at runtime from the charter.
  */
 export function createNode<S>(config: NodeConfig<S>): Node<S> {
   const {
-    executor,
     instructions,
     tools = {},
     validator,
     transitions = {},
     initialState,
+    packs,
   } = config;
 
   // Validate tool names match their keys
@@ -27,11 +26,11 @@ export function createNode<S>(config: NodeConfig<S>): Node<S> {
 
   return {
     id: uuid(),
-    executor,
     instructions,
     tools,
     validator,
     transitions,
     initialState,
+    packs,
   };
 }

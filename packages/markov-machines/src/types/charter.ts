@@ -2,15 +2,7 @@ import type { AnyToolDefinition } from "./tools.js";
 import type { Transition } from "./transitions.js";
 import type { Node } from "./node.js";
 import type { Executor } from "../executor/types.js";
-
-/**
- * Model configuration for executors.
- */
-export interface ModelConfig {
-  model: string;
-  maxTokens?: number;
-  temperature?: number;
-}
+import type { Pack } from "./pack.js";
 
 /**
  * Charter configuration for createCharter.
@@ -18,8 +10,8 @@ export interface ModelConfig {
  */
 export interface CharterConfig {
   name: string;
-  /** Registered executors (for ref-based lookup) */
-  executors?: Record<string, Executor>;
+  /** Single executor for running nodes */
+  executor: Executor;
   /** Registered tools (for ref-based lookup, available to all nodes) */
   tools?: Record<string, AnyToolDefinition>;
   /** Registered transitions (for ref-based lookup) */
@@ -28,18 +20,19 @@ export interface CharterConfig {
   /** Registered nodes (for ref-based lookup) */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodes?: Record<string, Node<any>>;
-  /** Default model config for standard executors */
-  config: ModelConfig;
+  /** Registered packs (reusable modules with state and tools) */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  packs?: Pack<any>[];
 }
 
 /**
- * Charter instance - static registry of executors, tools, transitions, and nodes.
- * Charter has no state - it's purely for ref resolution and serialization.
+ * Charter instance - static registry with single executor, tools, transitions, and nodes.
+ * Charter has no state - state lives in NodeInstances.
  */
 export interface Charter {
   name: string;
-  /** Registered executors */
-  executors: Record<string, Executor>;
+  /** Single executor for running nodes */
+  executor: Executor;
   /** Registered tools (available to all nodes via ref resolution) */
   tools: Record<string, AnyToolDefinition>;
   /** Registered transitions */
@@ -48,6 +41,7 @@ export interface Charter {
   /** Registered nodes */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodes: Record<string, Node<any>>;
-  /** Default model config */
-  config: ModelConfig;
+  /** Registered packs */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  packs: Pack<any>[];
 }

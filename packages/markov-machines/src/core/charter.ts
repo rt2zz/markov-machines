@@ -2,17 +2,17 @@ import type { Charter, CharterConfig } from "../types/charter.js";
 
 /**
  * Create a new charter instance.
- * A charter is a static registry of executors, tools, transitions, and nodes.
+ * A charter is a static registry with a single executor, tools, transitions, nodes, and packs.
  * It has no state - state lives in NodeInstances.
  */
 export function createCharter(config: CharterConfig): Charter {
   const {
     name,
-    executors = {},
+    executor,
     tools = {},
     transitions = {},
     nodes = {},
-    config: modelConfig,
+    packs = [],
   } = config;
 
   // Validate tool names match keys
@@ -24,21 +24,12 @@ export function createCharter(config: CharterConfig): Charter {
     }
   }
 
-  // Validate executor types
-  for (const [key, executor] of Object.entries(executors)) {
-    if (!executor.type) {
-      throw new Error(
-        `Executor "${key}" is missing type property`,
-      );
-    }
-  }
-
   return {
     name,
-    executors,
+    executor,
     tools,
     transitions,
     nodes,
-    config: modelConfig,
+    packs,
   };
 }

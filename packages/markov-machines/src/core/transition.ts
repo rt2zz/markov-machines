@@ -4,23 +4,51 @@ import type {
   CodeTransition,
   TransitionContext,
   TransitionResult,
+  TransitionHelpers,
+  SpawnTarget,
+  YieldResult,
+  SpawnResult,
 } from "../types/transitions.js";
 
 /**
+ * Create the transition helpers object.
+ */
+export function createHelpers(): TransitionHelpers {
+  return {
+    yield: <P = unknown>(payload?: P): YieldResult<P> => ({
+      type: "yield",
+      payload,
+    }),
+    spawn: <T = unknown>(
+      nodeOrTargets: Node<T> | SpawnTarget<T>[],
+      state?: T,
+    ): SpawnResult<T> => {
+      const children = Array.isArray(nodeOrTargets)
+        ? nodeOrTargets
+        : [{ node: nodeOrTargets, state }];
+      return {
+        type: "spawn",
+        children,
+      };
+    },
+  };
+}
+
+/**
  * Configuration for creating a transition.
- * S is the source state type (root state for charter transitions, node state for node transitions).
+ * S is the source state type.
  */
 export interface TransitionConfig<S> {
   description: string;
   /** Optional custom arguments schema */
   arguments?: z.ZodType;
   /**
-   * Execute function that returns the target node and optionally the new state.
-   * Use transitionTo() helper for type-safe returns.
+   * Execute function with yield/spawn helpers.
    */
   execute: (
     state: S,
     ctx: TransitionContext,
+    helpers: TransitionHelpers,
   ) => Promise<TransitionResult> | TransitionResult;
 }
 
@@ -42,24 +70,29 @@ export function createTransition<S>(
 
 /**
  * Create a new code transition.
- * S is the source state type - root state for charter transitions, node state for node transitions.
+ * S is the source state type.
  *
  * @example
- * // With explicit types (for charter transition)
- * const toCheckout = createTransition<RootState>({
+ * // Normal transition
+ * const toCheckout = createTransition({
  *   description: "Proceed to checkout",
- *   execute: (rootState, ctx) => transitionTo(checkoutNode, {
- *     items: rootState.cart,
+ *   execute: (state, ctx, helpers) => transitionTo(checkoutNode, {
+ *     items: state.cart,
  *   }),
  * });
  *
  * @example
- * // With type inference from source node (for node transition)
- * const toCheckout = createTransition(cartNode, {
- *   description: "Proceed to checkout",
- *   execute: (state, ctx) => transitionTo(checkoutNode, {
- *     items: state.cart, // state is inferred as CartState
- *   }),
+ * // Spawn children
+ * const spawnWorker = createTransition({
+ *   description: "Spawn a worker",
+ *   execute: (state, ctx, { spawn }) => spawn(workerNode, { taskId: "123" }),
+ * });
+ *
+ * @example
+ * // Yield to parent
+ * const complete = createTransition({
+ *   description: "Complete and yield",
+ *   execute: (state, ctx, { yield: yieldFn }) => yieldFn({ result: state.result }),
  * });
  */
 export function createTransition<S>(
@@ -72,6 +105,10 @@ export function createTransition<S>(
   return {
     description: config.description,
     arguments: config.arguments,
-    execute: config.execute,
+    execute: (state: S, ctx: TransitionContext, helpers: TransitionHelpers) => {
+      // Use provided helpers or create default ones
+      const h = helpers ?? createHelpers();
+      return config.execute(state, ctx, h);
+    },
   };
 }

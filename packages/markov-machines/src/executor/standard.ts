@@ -1,79 +1,120 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { MessageParam, ContentBlock as AnthropicContentBlock } from "@anthropic-ai/sdk/resources/messages";
+import type {
+  MessageParam,
+  ContentBlock as AnthropicContentBlock,
+} from "@anthropic-ai/sdk/resources/messages";
 import type { Charter } from "../types/charter.js";
-import type { NodeInstance } from "../types/instance.js";
+import type { Instance } from "../types/instance.js";
+import { createInstance } from "../types/instance.js";
 import type { Node } from "../types/node.js";
-import type { Message, ContentBlock, ToolResultBlock } from "../types/messages.js";
+import type {
+  Message,
+  ContentBlock,
+  ToolResultBlock,
+} from "../types/messages.js";
 import type { Transition } from "../types/transitions.js";
-import { userMessage, assistantMessage, toolResult, getMessageText } from "../types/messages.js";
+import {
+  isTransitionToResult,
+  isSpawnResult,
+  isYieldResult,
+} from "../types/transitions.js";
+import {
+  userMessage,
+  assistantMessage,
+  toolResult,
+  getMessageText,
+} from "../types/messages.js";
 import { generateToolDefinitions } from "../tools/tool-generator.js";
 import { updateState } from "../runtime/state-manager.js";
 import { executeTool } from "../runtime/tool-executor.js";
 import { executeTransition } from "../runtime/transition-executor.js";
-import { resolveTool, collectAvailableTools } from "../runtime/ref-resolver.js";
-import type { Executor, StandardExecutorConfig, RunOptions, RunResult } from "./types.js";
+import {
+  resolveTool,
+} from "../runtime/ref-resolver.js";
+import { isAnthropicBuiltinTool } from "../types/tools.js";
+import type {
+  Executor,
+  StandardExecutorConfig,
+  RunOptions,
+  RunResult,
+} from "./types.js";
 
 /**
  * Standard executor implementation using Anthropic SDK.
  * Implements the agentic loop with tool calls until text response.
- * Does NOT support children - this is a leaf executor.
  */
 export class StandardExecutor implements Executor {
   type = "standard" as const;
   private client: Anthropic;
-  private defaultModel: string;
+  private model: string;
+  private maxTokens: number;
 
   constructor(config: StandardExecutorConfig = {}) {
     this.client = new Anthropic({
       apiKey: config.apiKey,
     });
-    this.defaultModel = config.model ?? "claude-sonnet-4-20250514";
+    this.model = config.model ?? "claude-sonnet-4-20250514";
+    this.maxTokens = config.maxTokens ?? 4096;
   }
 
   async run(
     charter: Charter,
-    instance: NodeInstance,
-    ancestors: NodeInstance[],
+    instance: Instance,
+    ancestors: Instance[],
     input: string,
     options?: RunOptions,
   ): Promise<RunResult> {
     const maxTurns = options?.maxTurns ?? 50;
     let currentState = instance.state;
     let currentNode = instance.node;
+    let currentChildren = instance.child;
     const newMessages: Message[] = [];
 
     // Build ancestor state map for tool execution
-    // We'll need to track which ancestors have been updated
-    const ancestorStates = new Map<NodeInstance, unknown>();
+    const ancestorStates = new Map<Instance, unknown>();
     for (const ancestor of ancestors) {
       ancestorStates.set(ancestor, ancestor.state);
     }
+
+    // Get pack states from root instance (first ancestor or current instance)
+    const rootInstance = ancestors[0] ?? instance;
+    const packStates: Record<string, unknown> = { ...(rootInstance.packStates ?? {}) };
 
     // Add user input message
     newMessages.push(userMessage(input));
 
     // Build conversation history for API
-    // Note: We don't have access to machine.history here, caller should handle that
     const conversationHistory: MessageParam[] = [
       { role: "user", content: input },
     ];
 
     let turns = 0;
-    let stopReason: "end_turn" | "max_tokens" | "delegated" = "end_turn";
+    let stopReason: "end_turn" | "max_tokens" | "yield" = "end_turn";
+    let yieldPayload: unknown = undefined;
 
     while (turns < maxTurns) {
       turns++;
 
       // Generate tools for current node (includes ancestor tools)
-      const tools = generateToolDefinitions(charter, currentNode, ancestors.map(a => a.node));
+      const tools = generateToolDefinitions(
+        charter,
+        currentNode,
+        ancestors.map((a) => a.node),
+      );
 
       // Build system prompt
-      const systemPrompt = this.buildSystemPrompt(currentNode, currentState, ancestors);
+      const systemPrompt = this.buildSystemPrompt(
+        charter,
+        currentNode,
+        currentState,
+        ancestors,
+        packStates,
+      );
 
       // Call Claude API
       const response = await this.client.messages.create({
-        model: charter.config.model ?? this.defaultModel,
-        max_tokens: charter.config.maxTokens ?? 4096,
+        model: this.model,
+        max_tokens: this.maxTokens,
         system: systemPrompt,
         messages: conversationHistory,
         tools: tools.map((t) => ({
@@ -120,14 +161,18 @@ export class StandardExecutor implements Executor {
           // Handle updateState
           if (name === "updateState") {
             const patch = (toolInput as { patch: Partial<unknown> }).patch;
-            const result = updateState(currentState, patch, currentNode.validator);
+            const result = updateState(
+              currentState,
+              patch,
+              currentNode.validator,
+            );
 
             if (result.success) {
               currentState = result.state;
               toolResults.push(toolResult(id, "State updated successfully"));
             } else {
               toolResults.push(
-                toolResult(id, `State update failed: ${result.error}`, true)
+                toolResult(id, `State update failed: ${result.error}`, true),
               );
             }
             continue;
@@ -137,7 +182,7 @@ export class StandardExecutor implements Executor {
           if (name === "transition") {
             if (queuedTransition) {
               toolResults.push(
-                toolResult(id, "Only one transition allowed per turn", true)
+                toolResult(id, "Only one transition allowed per turn", true),
               );
               continue;
             }
@@ -152,7 +197,7 @@ export class StandardExecutor implements Executor {
           if (name.startsWith("transition_")) {
             if (queuedTransition) {
               toolResults.push(
-                toolResult(id, "Only one transition allowed per turn", true)
+                toolResult(id, "Only one transition allowed per turn", true),
               );
               continue;
             }
@@ -164,47 +209,100 @@ export class StandardExecutor implements Executor {
             };
             queuedTransition = { name: transitionName, reason, args };
             toolResults.push(
-              toolResult(id, `Transition to "${transitionName}" queued`)
+              toolResult(id, `Transition to "${transitionName}" queued`),
             );
             continue;
           }
 
+          // Check if this is an Anthropic builtin tool (server-side, handled by API)
+          const nodeToolEntry = currentNode.tools[name];
+          if (nodeToolEntry && isAnthropicBuiltinTool(nodeToolEntry)) {
+            // Builtin tools are handled server-side by Anthropic
+            // The results are already in the response, no execution needed
+            continue;
+          }
+
           // Resolve and execute tool (walks up ancestor tree)
-          const resolved = resolveTool(charter, { node: currentNode, state: currentState }, ancestors, name);
+          const resolved = resolveTool(
+            charter,
+            { id: instance.id, node: currentNode, state: currentState },
+            ancestors,
+            name,
+          );
 
           if (resolved) {
             const { tool, owner } = resolved;
 
-            // Determine which state to use and how to update it
+            // Check if this is a pack tool
+            if (typeof owner === "object" && "pack" in owner) {
+              // Pack tool - use pack state
+              const packName = owner.pack;
+              const pack = charter.packs.find((p) => p.name === packName);
+              if (!pack) {
+                toolResults.push(toolResult(id, `Pack not found: ${packName}`, true));
+                continue;
+              }
+              const packState = packStates[packName];
+
+              // Execute pack tool with pack context
+              try {
+                const packTool = tool as { execute: (input: unknown, ctx: { state: unknown; updateState: (patch: Partial<unknown>) => void }) => Promise<unknown> | unknown };
+                const result = await packTool.execute(toolInput, {
+                  state: packState,
+                  updateState: (patch: Partial<unknown>) => {
+                    // Validate and update pack state
+                    const merged = { ...(packState as object), ...patch };
+                    const parseResult = pack.validator.safeParse(merged);
+                    if (parseResult.success) {
+                      packStates[packName] = parseResult.data;
+                    }
+                  },
+                });
+                toolResults.push(toolResult(id, typeof result === "string" ? result : JSON.stringify(result)));
+              } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                toolResults.push(toolResult(id, `Tool error: ${errorMsg}`, true));
+              }
+              continue;
+            }
+
+            // Non-pack tool - determine which state to use and how to update it
             let toolState: unknown;
             let onUpdate: (patch: Partial<unknown>) => void;
 
             if (owner === "charter") {
-              // Charter tools don't have state access in new architecture
-              // They operate statelessly or we need a different approach
-              // For now, give them access to current node state
               toolState = currentState;
               onUpdate = (patch) => {
-                const result = updateState(currentState, patch, currentNode.validator);
+                const result = updateState(
+                  currentState,
+                  patch,
+                  currentNode.validator,
+                );
                 if (result.success) {
                   currentState = result.state;
                 }
               };
             } else if (owner === instance || owner.node.id === currentNode.id) {
-              // Current node's tool
               toolState = currentState;
               onUpdate = (patch) => {
-                const result = updateState(currentState, patch, currentNode.validator);
+                const result = updateState(
+                  currentState,
+                  patch,
+                  currentNode.validator,
+                );
                 if (result.success) {
                   currentState = result.state;
                 }
               };
             } else {
-              // Ancestor tool - use and update ancestor's state
               toolState = ancestorStates.get(owner) ?? owner.state;
               onUpdate = (patch) => {
                 const ownerState = ancestorStates.get(owner) ?? owner.state;
-                const result = updateState(ownerState, patch, owner.node.validator);
+                const result = updateState(
+                  ownerState,
+                  patch,
+                  owner.node.validator,
+                );
                 if (result.success) {
                   ancestorStates.set(owner, result.state);
                 }
@@ -222,9 +320,7 @@ export class StandardExecutor implements Executor {
           }
 
           // Unknown tool
-          toolResults.push(
-            toolResult(id, `Unknown tool: ${name}`, true),
-          );
+          toolResults.push(toolResult(id, `Unknown tool: ${name}`, true));
         }
 
         // Add tool results to conversation
@@ -255,17 +351,49 @@ export class StandardExecutor implements Executor {
             queuedTransition.args,
           );
 
-          currentNode = result.node as Node<unknown>;
+          // Handle discriminated union
+          if (isYieldResult(result)) {
+            // Yield: stop execution and return payload
+            stopReason = "yield";
+            yieldPayload = result.payload;
+            break;
+          }
 
-          // Update state: use returned state, or node's initialState, or throw
-          if (result.state !== undefined) {
-            currentState = result.state;
-          } else if (currentNode.initialState !== undefined) {
-            currentState = currentNode.initialState;
-          } else {
-            throw new Error(
-              `Transition returned undefined state and target node has no initialState`
+          if (isSpawnResult(result)) {
+            // Spawn: add children to current instance
+            const newChildren = result.children.map(({ node, state }) =>
+              createInstance(node, state ?? node.initialState),
             );
+
+            // Append to existing children
+            if (Array.isArray(currentChildren)) {
+              currentChildren = [...currentChildren, ...newChildren];
+            } else if (currentChildren) {
+              currentChildren = [currentChildren, ...newChildren];
+            } else {
+              currentChildren =
+                newChildren.length === 1 ? newChildren[0] : newChildren;
+            }
+            // Don't break - continue with current node
+            continue;
+          }
+
+          // Normal transition (TransitionToResult)
+          if (isTransitionToResult(result)) {
+            currentNode = result.node as Node<unknown>;
+
+            // Update state: use returned state, or node's initialState, or throw
+            if (result.state !== undefined) {
+              currentState = result.state;
+            } else if (currentNode.initialState !== undefined) {
+              currentState = currentNode.initialState;
+            } else {
+              throw new Error(
+                `Transition returned undefined state and target node has no initialState`,
+              );
+            }
+            // Clear children on transition to new node
+            currentChildren = undefined;
           }
         }
       }
@@ -273,22 +401,25 @@ export class StandardExecutor implements Executor {
 
     // Extract final text response
     const lastMessage = newMessages[newMessages.length - 1];
-    const response = lastMessage ? getMessageText(lastMessage) : "";
+    const textResponse = lastMessage ? getMessageText(lastMessage) : "";
 
-    // Build updated instance with any ancestor state changes
+    // Build updated instance
     const updatedInstance = this.buildUpdatedInstance(
       instance,
       currentNode,
       currentState,
+      currentChildren,
       ancestors,
-      ancestorStates,
+      packStates,
     );
 
     return {
-      response,
+      response: textResponse,
       instance: updatedInstance,
       messages: newMessages,
       stopReason,
+      yieldPayload,
+      packStates: Object.keys(packStates).length > 0 ? packStates : undefined,
     };
   }
 
@@ -296,18 +427,22 @@ export class StandardExecutor implements Executor {
    * Build updated instance, propagating ancestor state changes.
    */
   private buildUpdatedInstance(
-    originalInstance: NodeInstance,
+    originalInstance: Instance,
     currentNode: Node<unknown>,
     currentState: unknown,
-    ancestors: NodeInstance[],
-    ancestorStates: Map<NodeInstance, unknown>,
-  ): NodeInstance {
-    // For now, just update the leaf instance
-    // TODO: Properly propagate ancestor state changes up the tree
+    currentChildren: Instance | Instance[] | undefined,
+    ancestors: Instance[],
+    packStates: Record<string, unknown>,
+  ): Instance {
+    // Build the updated leaf instance
+    // Include packStates only if this is the root instance (no ancestors)
+    const isRoot = ancestors.length === 0;
     return {
+      id: originalInstance.id,
       node: currentNode,
       state: currentState,
-      child: originalInstance.child,
+      child: currentChildren,
+      ...(isRoot && Object.keys(packStates).length > 0 ? { packStates } : {}),
     };
   }
 
@@ -315,9 +450,11 @@ export class StandardExecutor implements Executor {
    * Build system prompt for the current node.
    */
   protected buildSystemPrompt<S>(
+    charter: Charter,
     node: Node<S>,
     state: S,
-    ancestors: NodeInstance[],
+    ancestors: Instance[],
+    packStates: Record<string, unknown>,
   ): string {
     let prompt = `${node.instructions}
 
@@ -330,13 +467,42 @@ ${this.buildTransitionsSection(node.transitions)}`;
       prompt += `\n\n${this.buildAncestorContext(ancestors)}`;
     }
 
+    // Add active packs section
+    const packsSection = this.buildPacksSection(charter, node, packStates);
+    if (packsSection) {
+      prompt += `\n\n${packsSection}`;
+    }
+
     return prompt;
+  }
+
+  /**
+   * Build the active packs section of the system prompt.
+   */
+  protected buildPacksSection<S>(
+    _charter: Charter,
+    node: Node<S>,
+    packStates: Record<string, unknown>,
+  ): string {
+    const activePacks = node.packs ?? [];
+    if (activePacks.length === 0) return "";
+
+    const sections = activePacks.map((pack) => {
+      const state = packStates[pack.name];
+      return `### ${pack.name}
+${pack.description}
+State: \`\`\`json
+${JSON.stringify(state, null, 2)}
+\`\`\``;
+    });
+
+    return `## Active Packs\n${sections.join("\n\n")}`;
   }
 
   /**
    * Build ancestor context section.
    */
-  protected buildAncestorContext(ancestors: NodeInstance[]): string {
+  protected buildAncestorContext(ancestors: Instance[]): string {
     const sections = ancestors.map((ancestor, i) => {
       const depth = ancestors.length - i;
       return `### Ancestor ${depth}: ${ancestor.node.instructions.slice(0, 100)}...
@@ -381,7 +547,7 @@ ${transitionList || "None"}`;
    * Convert Anthropic content blocks to our format.
    */
   private convertContentBlocks(
-    blocks: AnthropicContentBlock[]
+    blocks: AnthropicContentBlock[],
   ): ContentBlock[] {
     return blocks.map((block) => {
       if (block.type === "text") {
@@ -396,7 +562,10 @@ ${transitionList || "None"}`;
         };
       }
       // Handle thinking blocks if present
-      if ("thinking" in block && typeof (block as { thinking?: string }).thinking === "string") {
+      if (
+        "thinking" in block &&
+        typeof (block as { thinking?: string }).thinking === "string"
+      ) {
         return {
           type: "thinking",
           thinking: (block as { thinking: string }).thinking,
@@ -411,6 +580,8 @@ ${transitionList || "None"}`;
 /**
  * Create a standard executor instance.
  */
-export function createStandardExecutor(config?: StandardExecutorConfig): StandardExecutor {
+export function createStandardExecutor(
+  config?: StandardExecutorConfig,
+): StandardExecutor {
   return new StandardExecutor(config);
 }

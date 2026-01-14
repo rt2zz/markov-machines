@@ -8,14 +8,9 @@ export type {
   ToolDefinition,
   AnyToolDefinition,
   AnthropicToolDefinition,
-  // Legacy aliases
-  CharterToolContext,
-  NodeToolContext,
-  CharterToolDefinition,
-  NodeToolDefinition,
-  AnyCharterToolDefinition,
-  AnyNodeToolDefinition,
+  AnthropicBuiltinTool,
 } from "./tools.js";
+export { isAnthropicBuiltinTool } from "./tools.js";
 
 // Transitions
 export type {
@@ -24,12 +19,20 @@ export type {
   GeneralTransition,
   TransitionContext,
   TransitionResult,
+  TransitionToResult,
+  SpawnResult,
+  YieldResult,
+  SpawnTarget,
+  TransitionHelpers,
 } from "./transitions.js";
 export {
   transitionTo,
   isCodeTransition,
   isGeneralTransition,
   transitionHasArguments,
+  isTransitionToResult,
+  isSpawnResult,
+  isYieldResult,
 } from "./transitions.js";
 
 // State
@@ -41,15 +44,17 @@ export type { Node, NodeConfig } from "./node.js";
 export { isNode } from "./node.js";
 
 // Instance
-export type { NodeInstance } from "./instance.js";
-export { isNodeInstance, getLeafInstance, getInstancePath } from "./instance.js";
+export type { Instance } from "./instance.js";
+export {
+  createInstance,
+  isInstance,
+  getActiveInstance,
+  getInstancePath,
+  getAllInstances,
+} from "./instance.js";
 
 // Charter
-export type {
-  Charter,
-  CharterConfig,
-  ModelConfig,
-} from "./charter.js";
+export type { Charter, CharterConfig } from "./charter.js";
 
 // Messages
 export type {
@@ -68,4 +73,19 @@ export {
 } from "./messages.js";
 
 // Machine
-export type { Machine, MachineConfig, SerializedMachine, SerializedInstance } from "./machine.js";
+export type {
+  Machine,
+  MachineConfig,
+  SerializedMachine,
+  SerializedInstance,
+} from "./machine.js";
+
+// Pack
+export type {
+  Pack,
+  PackConfig,
+  PackToolDefinition,
+  PackToolContext,
+  AnyPackToolDefinition,
+} from "./pack.js";
+export { isPack, isPackToolDefinition } from "./pack.js";

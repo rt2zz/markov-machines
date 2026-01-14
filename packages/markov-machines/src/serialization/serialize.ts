@@ -1,7 +1,11 @@
 import { z } from "zod";
 import type { Node } from "../types/node.js";
-import type { NodeInstance } from "../types/instance.js";
-import type { Machine, SerializedMachine, SerializedInstance } from "../types/machine.js";
+import type { Instance } from "../types/instance.js";
+import type {
+  Machine,
+  SerializedMachine,
+  SerializedInstance,
+} from "../types/machine.js";
 import type { Ref, SerialNode, SerialTransition } from "../types/refs.js";
 import type { Charter } from "../types/charter.js";
 import type { Transition } from "../types/transitions.js";
@@ -45,7 +49,6 @@ export function serializeNode<S>(
   }
 
   return {
-    executor: node.executor,
     instructions: node.instructions,
     validator,
     transitions,
@@ -71,7 +74,7 @@ function serializeTransition<S>(
     // Check if registered
     if (charter) {
       for (const [name, registeredTransition] of Object.entries(
-        charter.transitions
+        charter.transitions,
       )) {
         if (registeredTransition === transition) {
           return { ref: name };
@@ -79,7 +82,7 @@ function serializeTransition<S>(
       }
     }
     throw new Error(
-      "CodeTransition and GeneralTransition must be registered in the charter for serialization"
+      "CodeTransition and GeneralTransition must be registered in the charter for serialization",
     );
   }
 
@@ -98,26 +101,34 @@ function serializeTransition<S>(
  * Serialize a node instance to a SerializedInstance.
  */
 export function serializeInstance(
-  instance: NodeInstance,
+  instance: Instance,
   charter?: Charter,
 ): SerializedInstance {
   const serializedNode = serializeNode(instance.node, charter);
 
+  // Handle array or single child
+  let child: SerializedInstance | SerializedInstance[] | undefined;
+  if (instance.child) {
+    if (Array.isArray(instance.child)) {
+      child = instance.child.map((c) => serializeInstance(c, charter));
+    } else {
+      child = serializeInstance(instance.child, charter);
+    }
+  }
+
   return {
+    id: instance.id,
     node: serializedNode,
     state: instance.state,
-    child: instance.child
-      ? serializeInstance(instance.child, charter)
-      : undefined,
+    child,
+    ...(instance.packStates ? { packStates: instance.packStates } : {}),
   };
 }
 
 /**
  * Serialize a machine for persistence.
  */
-export function serializeMachine(
-  machine: Machine,
-): SerializedMachine {
+export function serializeMachine(machine: Machine): SerializedMachine {
   return {
     instance: serializeInstance(machine.instance, machine.charter),
     history: machine.history,

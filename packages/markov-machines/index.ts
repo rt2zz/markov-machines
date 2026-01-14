@@ -2,17 +2,16 @@
 export { createCharter } from "./src/core/charter.js";
 export { createNode } from "./src/core/node.js";
 export { createMachine } from "./src/core/machine.js";
-export { createTransition } from "./src/core/transition.js";
+export { createTransition, createHelpers } from "./src/core/transition.js";
 export type { TransitionConfig } from "./src/core/transition.js";
 export { runMachine } from "./src/core/run.js";
+export { createPack } from "./src/core/pack.js";
 
 // Executors
 export { StandardExecutor, createStandardExecutor } from "./src/executor/standard.js";
-export { VesselExecutor, createVesselExecutor } from "./src/executor/vessel.js";
 export type {
   Executor,
   StandardExecutorConfig,
-  VesselExecutorConfig,
   RunOptions,
   RunResult,
 } from "./src/executor/types.js";
@@ -26,12 +25,11 @@ export type {
   // Charter
   Charter,
   CharterConfig,
-  ModelConfig,
   // Node
   Node,
   NodeConfig,
   // Instance
-  NodeInstance,
+  Instance,
   // Machine
   Machine,
   MachineConfig,
@@ -48,18 +46,17 @@ export type {
   GeneralTransition,
   TransitionContext,
   TransitionResult,
+  TransitionToResult,
+  SpawnResult,
+  YieldResult,
+  SpawnTarget,
+  TransitionHelpers,
   // Tools
   ToolContext,
   ToolDefinition,
   AnyToolDefinition,
   AnthropicToolDefinition,
-  // Legacy tool aliases
-  CharterToolContext,
-  NodeToolContext,
-  CharterToolDefinition,
-  NodeToolDefinition,
-  AnyCharterToolDefinition,
-  AnyNodeToolDefinition,
+  AnthropicBuiltinTool,
   // Messages
   Message,
   ContentBlock,
@@ -67,6 +64,12 @@ export type {
   ToolUseBlock,
   ToolResultBlock,
   ThinkingBlock,
+  // Pack
+  Pack,
+  PackConfig,
+  PackToolDefinition,
+  PackToolContext,
+  AnyPackToolDefinition,
 } from "./src/types/index.js";
 
 // Type guards and helpers
@@ -75,13 +78,21 @@ export {
   isSerialNode,
   isSerialTransition,
   isNode,
-  isNodeInstance,
-  getLeafInstance,
+  isInstance,
+  createInstance,
+  getActiveInstance,
   getInstancePath,
+  getAllInstances,
   isCodeTransition,
   isGeneralTransition,
   transitionHasArguments,
   transitionTo,
+  isTransitionToResult,
+  isSpawnResult,
+  isYieldResult,
+  isPack,
+  isPackToolDefinition,
+  isAnthropicBuiltinTool,
 } from "./src/types/index.js";
 
 // Message helpers

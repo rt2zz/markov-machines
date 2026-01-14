@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Node } from "../types/node.js";
 import type { Charter } from "../types/charter.js";
 import type { AnthropicToolDefinition } from "../types/tools.js";
+import { isAnthropicBuiltinTool } from "../types/tools.js";
 import type { Transition } from "../types/transitions.js";
 import {
   isCodeTransition,
@@ -113,6 +114,14 @@ export function generateToolDefinitions<S>(
   // 3. Add current node's tools (highest priority - added first to seenNames)
   for (const [name, tool] of Object.entries(node.tools)) {
     if (seenNames.has(name)) continue;
+
+    // Handle Anthropic built-in tools (server-side)
+    if (isAnthropicBuiltinTool(tool)) {
+      tools.push({ type: tool.builtinType } as unknown as AnthropicToolDefinition);
+      seenNames.add(name);
+      continue;
+    }
+
     const inputSchema = z.toJSONSchema(tool.inputSchema, {
       target: "openapi-3.0",
     });
@@ -143,7 +152,7 @@ export function generateToolDefinitions<S>(
     }
   }
 
-  // 5. Add charter tools (lowest priority)
+  // 5. Add charter tools
   for (const [name, tool] of Object.entries(charter.tools)) {
     if (seenNames.has(name)) continue; // Node/ancestor already has this tool
     const inputSchema = z.toJSONSchema(tool.inputSchema, {
@@ -155,6 +164,22 @@ export function generateToolDefinitions<S>(
       input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
     });
     seenNames.add(name);
+  }
+
+  // 6. Add pack tools (lowest priority - only for packs on current node)
+  for (const pack of node.packs ?? []) {
+    for (const [name, tool] of Object.entries(pack.tools)) {
+      if (seenNames.has(name)) continue; // Higher priority tool already exists
+      const inputSchema = z.toJSONSchema(tool.inputSchema, {
+        target: "openapi-3.0",
+      });
+      tools.push({
+        name,
+        description: tool.description,
+        input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
+      });
+      seenNames.add(name);
+    }
   }
 
   return tools;
@@ -181,13 +206,7 @@ function resolveTransition<S>(
  * Get the description for a transition.
  */
 function getTransitionDescription<S>(transition: Transition<S>): string {
-  if (isCodeTransition(transition)) {
-    return transition.description;
-  }
-  if (isGeneralTransition(transition)) {
-    return transition.description;
-  }
-  if ("description" in transition) {
+  if ("description" in transition && typeof transition.description === "string") {
     return transition.description;
   }
   return "Transition to another node";

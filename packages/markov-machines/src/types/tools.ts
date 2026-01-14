@@ -42,11 +42,26 @@ export type AnyToolDefinition<S = unknown> = ToolDefinition<any, any, S>;
  */
 export type AnthropicToolDefinition = Tool;
 
-// Legacy aliases for backwards compatibility
-export type ToolDefinitionLegacy<TInput, TOutput, S> = ToolDefinition<TInput, TOutput, S>;
-export type CharterToolContext<R = unknown> = ToolContext<R>;
-export type NodeToolContext<S = unknown> = ToolContext<S>;
-export type CharterToolDefinition<TInput = unknown, TOutput = unknown, R = unknown> = ToolDefinition<TInput, TOutput, R>;
-export type NodeToolDefinition<TInput = unknown, TOutput = unknown, S = unknown> = ToolDefinition<TInput, TOutput, S>;
-export type AnyCharterToolDefinition<R = unknown> = AnyToolDefinition<R>;
-export type AnyNodeToolDefinition<S = unknown> = AnyToolDefinition<S>;
+/**
+ * Anthropic built-in tool (server-side, no execute function).
+ * Used for tools like web_search that Anthropic handles.
+ */
+export interface AnthropicBuiltinTool {
+  type: "anthropic-builtin";
+  name: string;
+  /** The Anthropic tool type, e.g., "web_search_20250305" */
+  builtinType: string;
+}
+
+/**
+ * Type guard for AnthropicBuiltinTool.
+ */
+export function isAnthropicBuiltinTool(tool: unknown): tool is AnthropicBuiltinTool {
+  return (
+    typeof tool === "object" &&
+    tool !== null &&
+    "type" in tool &&
+    (tool as AnthropicBuiltinTool).type === "anthropic-builtin"
+  );
+}
+

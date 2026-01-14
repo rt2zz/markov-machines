@@ -4,7 +4,6 @@ import type { Node } from "./node.js";
 
 /**
  * Context passed to code transition execute functions.
- * Symmetric at both charter and node levels.
  */
 export interface TransitionContext {
   /** Arguments passed by the agent when calling the transition */
@@ -14,37 +13,83 @@ export interface TransitionContext {
 }
 
 /**
- * Result of executing a code transition.
- * Returns the target node and optionally the new state.
- * T is the target node's state type.
+ * Spawn target specification.
  */
-export interface TransitionResult<T = unknown> {
-  /** The target node to transition to */
+export interface SpawnTarget<T = unknown> {
   node: Node<T>;
-  /**
-   * The new state for the target node.
-   * If undefined, the node's default initial state will be used.
-   */
   state?: T;
+}
+
+/**
+ * Normal transition - replace current instance with new node.
+ */
+export interface TransitionToResult<T = unknown> {
+  type: "transition";
+  node: Node<T>;
+  state?: T;
+}
+
+/**
+ * Spawn - add child instance(s) to current node.
+ */
+export interface SpawnResult<T = unknown> {
+  type: "spawn";
+  children: Array<SpawnTarget<T>>;
+}
+
+/**
+ * Yield - return control to parent with optional payload.
+ * The yielding instance is REMOVED from the tree.
+ */
+export interface YieldResult<P = unknown> {
+  type: "yield";
+  payload?: P;
+}
+
+/**
+ * Union of all transition results.
+ */
+export type TransitionResult<T = unknown> =
+  | TransitionToResult<T>
+  | SpawnResult<T>
+  | YieldResult;
+
+/**
+ * Helpers provided to transition execute functions.
+ */
+export interface TransitionHelpers {
+  /**
+   * Yield control back to parent with optional payload.
+   * The current instance is REMOVED from the tree.
+   */
+  yield: <P = unknown>(payload?: P) => YieldResult<P>;
+
+  /**
+   * Spawn one or more child instances.
+   * Children are added to the current node's children array.
+   */
+  spawn: <T = unknown>(
+    nodeOrTargets: Node<T> | SpawnTarget<T>[],
+    state?: T,
+  ) => SpawnResult<T>;
 }
 
 /**
  * Code-defined transition (not serializable).
  * Executes custom logic to determine the target node and state.
- * S is the source state type (root state for charter transitions, node state for node transitions).
+ * S is the source state type.
  */
 export interface CodeTransition<S = unknown> {
   description: string;
   /** Optional custom arguments schema */
   arguments?: z.ZodType;
   /**
-   * Execute function that returns the target node and optionally the new state.
-   * If state is undefined, the target node's default initial state will be used.
-   * Use transitionTo() helper for type-safe returns.
+   * Execute function with yield/spawn helpers.
    */
   execute: (
     state: S,
     ctx: TransitionContext,
+    helpers: TransitionHelpers,
   ) => Promise<TransitionResult> | TransitionResult;
 }
 
@@ -60,10 +105,6 @@ export interface GeneralTransition {
 /**
  * Union of all transition types.
  * S is the source state type.
- * - CodeTransition: Custom code-defined transition
- * - SerialTransition: Serializable transition referencing a node
- * - GeneralTransition: Agent can create nodes dynamically
- * - Ref: Reference to a transition in the charter registry
  */
 export type Transition<S = unknown> =
   | CodeTransition<S>
@@ -73,13 +114,50 @@ export type Transition<S = unknown> =
 
 /**
  * Helper to create a type-safe transition result.
- * Ensures the state matches the target node's state type.
  */
 export function transitionTo<T>(
   node: Node<T>,
   state?: T,
-): TransitionResult<T> {
-  return { node, state };
+): TransitionToResult<T> {
+  return { type: "transition", node, state };
+}
+
+/**
+ * Type guard for TransitionToResult
+ */
+export function isTransitionToResult(
+  value: unknown,
+): value is TransitionToResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    (value as TransitionToResult).type === "transition"
+  );
+}
+
+/**
+ * Type guard for SpawnResult
+ */
+export function isSpawnResult(value: unknown): value is SpawnResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    (value as SpawnResult).type === "spawn"
+  );
+}
+
+/**
+ * Type guard for YieldResult
+ */
+export function isYieldResult(value: unknown): value is YieldResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    (value as YieldResult).type === "yield"
+  );
 }
 
 /**
@@ -100,7 +178,9 @@ export function isCodeTransition<S>(
 /**
  * Type guard for GeneralTransition
  */
-export function isGeneralTransition(value: unknown): value is GeneralTransition {
+export function isGeneralTransition(
+  value: unknown,
+): value is GeneralTransition {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -112,9 +192,7 @@ export function isGeneralTransition(value: unknown): value is GeneralTransition 
 /**
  * Check if a transition has custom arguments (requires named tool).
  */
-export function transitionHasArguments<S>(
-  transition: Transition<S>,
-): boolean {
+export function transitionHasArguments<S>(transition: Transition<S>): boolean {
   if (isCodeTransition(transition)) {
     return transition.arguments !== undefined;
   }

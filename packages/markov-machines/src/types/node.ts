@@ -1,15 +1,13 @@
 import type { z } from "zod";
-import type { Ref } from "./refs.js";
 import type { Transition } from "./transitions.js";
 import type { AnyToolDefinition } from "./tools.js";
+import type { Pack } from "./pack.js";
 
 /**
  * Node configuration for createNode.
  * S is the node's state type.
  */
 export interface NodeConfig<S = unknown> {
-  /** Reference to executor in charter.executors */
-  executor: Ref;
   instructions: string;
   /** Node tools (state access via context) */
   tools?: Record<string, AnyToolDefinition<S>>;
@@ -18,6 +16,9 @@ export interface NodeConfig<S = unknown> {
   transitions?: Record<string, Transition<S>>;
   /** Optional initial state for this node */
   initialState?: S;
+  /** Packs this node uses */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  packs?: Pack<any>[];
 }
 
 /**
@@ -27,8 +28,6 @@ export interface NodeConfig<S = unknown> {
 export interface Node<S = unknown> {
   /** Unique identifier for this node instance */
   id: string;
-  /** Reference to executor in charter.executors */
-  executor: Ref;
   /** Instructions for the agent in this node */
   instructions: string;
   /** Node tools (state access via context) */
@@ -39,6 +38,9 @@ export interface Node<S = unknown> {
   transitions: Record<string, Transition<S>>;
   /** Optional initial state for this node */
   initialState?: S;
+  /** Packs this node uses */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  packs?: Pack<any>[];
 }
 
 /**
@@ -49,7 +51,6 @@ export function isNode<S>(value: unknown): value is Node<S> {
     typeof value === "object" &&
     value !== null &&
     "id" in value &&
-    "executor" in value &&
     "instructions" in value &&
     "tools" in value &&
     "validator" in value &&

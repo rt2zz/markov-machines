@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ToolDefinition, ToolContext } from "markov-machines";
+import type { ToolDefinition } from "markov-machines";
 import { v4 as uuid } from "uuid";
 
 export interface Todo {
@@ -114,11 +114,3 @@ export const clearArchive: ToolDefinition<Record<string, never>, string, Archive
   },
 };
 
-export const todoTools = {
-  listTodos,
-  addTodo,
-  completeTodo,
-  deleteTodo,
-  listArchivedTodos,
-  clearArchive,
-};
