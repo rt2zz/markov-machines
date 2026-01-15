@@ -9,10 +9,11 @@
  */
 
 import type * as chat from "../chat.js";
+import type * as machineSteps from "../machineSteps.js";
+import type * as machineTurns from "../machineTurns.js";
 import type * as messages from "../messages.js";
 import type * as sessions from "../sessions.js";
 import type * as todos from "../todos.js";
-import type * as turns from "../turns.js";
 
 import type {
   ApiFromModules,
@@ -22,10 +23,11 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   chat: typeof chat;
+  machineSteps: typeof machineSteps;
+  machineTurns: typeof machineTurns;
   messages: typeof messages;
   sessions: typeof sessions;
   todos: typeof todos;
-  turns: typeof turns;
 }>;
 
 /**

@@ -3,7 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 
 /**
- * Create a new session with initial history entry (no turn yet).
+ * Create a new session with initial turn entry.
  */
 export const create = mutation({
   args: {
@@ -13,57 +13,96 @@ export const create = mutation({
   handler: async (ctx, { instanceId, instance }) => {
     // Create session first
     const sessionId = await ctx.db.insert("sessions", {
-      currentHistoryId: undefined,
+      currentTurnId: undefined,
     });
 
-    // Create initial history entry
-    const historyId = await ctx.db.insert("sessionHistory", {
+    // Create initial turn entry (no messages yet)
+    const turnId = await ctx.db.insert("machineTurns", {
       sessionId,
       parentId: undefined,
       instanceId,
       instance,
+      messages: [],
       createdAt: Date.now(),
     });
 
-    // Update session to point to initial history
-    await ctx.db.patch(sessionId, { currentHistoryId: historyId });
+    // Update session to point to initial turn
+    await ctx.db.patch(sessionId, { currentTurnId: turnId });
 
     return sessionId;
   },
 });
 
 /**
- * Get session with current history entry data.
+ * Get session with current turn data.
  */
 export const get = query({
   args: { id: v.id("sessions") },
   handler: async (ctx, { id }) => {
     const session = await ctx.db.get(id);
-    if (!session || !session.currentHistoryId) return null;
+    if (!session || !session.currentTurnId) return null;
 
-    const currentHistory = await ctx.db.get(session.currentHistoryId);
-    if (!currentHistory) return null;
-
-    // Get the turn for this history entry (if any)
-    const turn = await ctx.db
-      .query("turns")
-      .withIndex("by_history", (q) => q.eq("historyId", session.currentHistoryId!))
-      .first();
+    const currentTurn = await ctx.db.get(session.currentTurnId);
+    if (!currentTurn) return null;
 
     return {
       sessionId: id,
-      historyId: session.currentHistoryId,
-      instanceId: currentHistory.instanceId,
-      instance: currentHistory.instance,
-      turn: turn ? { messages: turn.messages, createdAt: turn.createdAt } : null,
-      createdAt: currentHistory.createdAt,
+      turnId: session.currentTurnId,
+      instanceId: currentTurn.instanceId,
+      instance: currentTurn.instance,
+      messages: currentTurn.messages,
+      createdAt: currentTurn.createdAt,
     };
   },
 });
 
 /**
- * Add a new turn after runMachine.
- * Creates both sessionHistory and turns entries.
+ * Create a new turn entry (called at the start of a turn).
+ * Returns the turnId to use for storing steps.
+ */
+export const createTurn = mutation({
+  args: {
+    sessionId: v.id("sessions"),
+    instanceId: v.string(),
+    instance: v.any(), // SerializedInstance
+  },
+  handler: async (ctx, { sessionId, instanceId, instance }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session) throw new Error("Session not found");
+
+    // Create turn entry
+    const turnId = await ctx.db.insert("machineTurns", {
+      sessionId,
+      parentId: session.currentTurnId,
+      instanceId,
+      instance,
+      messages: [], // Will be finalized later
+      createdAt: Date.now(),
+    });
+
+    // Update session pointer immediately
+    await ctx.db.patch(sessionId, { currentTurnId: turnId });
+
+    return turnId;
+  },
+});
+
+/**
+ * Finalize a turn with final instance and accumulated messages.
+ */
+export const finalizeTurn = mutation({
+  args: {
+    turnId: v.id("machineTurns"),
+    instance: v.any(), // SerializedInstance
+    messages: v.array(v.any()), // Message[] from this turn
+  },
+  handler: async (ctx, { turnId, instance, messages }) => {
+    await ctx.db.patch(turnId, { instance, messages });
+  },
+});
+
+/**
+ * Add a new turn after runMachine (legacy - creates and finalizes in one call).
  */
 export const addTurn = mutation({
   args: {
@@ -76,30 +115,20 @@ export const addTurn = mutation({
     const session = await ctx.db.get(sessionId);
     if (!session) throw new Error("Session not found");
 
-    const now = Date.now();
-
-    // Create history entry
-    const historyId = await ctx.db.insert("sessionHistory", {
+    // Create turn entry
+    const turnId = await ctx.db.insert("machineTurns", {
       sessionId,
-      parentId: session.currentHistoryId,
+      parentId: session.currentTurnId,
       instanceId,
       instance,
-      createdAt: now,
-    });
-
-    // Create turn entry
-    await ctx.db.insert("turns", {
-      sessionId,
-      historyId,
-      instanceId,
       messages,
-      createdAt: now,
+      createdAt: Date.now(),
     });
 
     // Update session pointer
-    await ctx.db.patch(sessionId, { currentHistoryId: historyId });
+    await ctx.db.patch(sessionId, { currentTurnId: turnId });
 
-    return historyId;
+    return turnId;
   },
 });
 
@@ -110,38 +139,32 @@ export const getFullHistory = query({
   args: { sessionId: v.id("sessions") },
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
-    if (!session?.currentHistoryId) return [];
+    if (!session?.currentTurnId) return [];
 
-    // Get all history entries for this session
-    const allEntries = await ctx.db
-      .query("sessionHistory")
+    // Get all turn entries for this session
+    const allTurns = await ctx.db
+      .query("machineTurns")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
       .collect();
 
     // Build a map for quick lookup
-    const entryMap = new Map(allEntries.map((e) => [e._id, e]));
+    const turnMap = new Map(allTurns.map((t) => [t._id, t]));
 
     // Walk from current back to root
-    const orderedEntries: typeof allEntries = [];
-    let currentId: Id<"sessionHistory"> | undefined = session.currentHistoryId;
+    const orderedTurns: typeof allTurns = [];
+    let currentId: Id<"machineTurns"> | undefined = session.currentTurnId;
 
     while (currentId) {
-      const entry = entryMap.get(currentId);
-      if (!entry) break;
-      orderedEntries.unshift(entry);
-      currentId = entry.parentId ?? undefined;
+      const turn = turnMap.get(currentId);
+      if (!turn) break;
+      orderedTurns.unshift(turn);
+      currentId = turn.parentId ?? undefined;
     }
 
-    // Join turns and collect messages
+    // Collect messages from all turns
     const messages: unknown[] = [];
-    for (const entry of orderedEntries) {
-      const turn = await ctx.db
-        .query("turns")
-        .withIndex("by_history", (q) => q.eq("historyId", entry._id))
-        .first();
-      if (turn) {
-        messages.push(...turn.messages);
-      }
+    for (const turn of orderedTurns) {
+      messages.push(...turn.messages);
     }
 
     return messages;
@@ -149,61 +172,47 @@ export const getFullHistory = query({
 });
 
 /**
- * Get all history entries for a session (for time travel UI).
+ * Get all turn entries for a session (for time travel UI).
  */
-export const getHistoryTree = query({
+export const getTurnTree = query({
   args: { sessionId: v.id("sessions") },
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
     if (!session) return null;
 
-    const entries = await ctx.db
-      .query("sessionHistory")
+    const turns = await ctx.db
+      .query("machineTurns")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
       .collect();
 
-    // Get turns for each entry
-    const entriesWithTurns = await Promise.all(
-      entries.map(async (entry) => {
-        const turn = await ctx.db
-          .query("turns")
-          .withIndex("by_history", (q) => q.eq("historyId", entry._id))
-          .first();
-        return {
-          ...entry,
-          turn: turn ? { messages: turn.messages } : null,
-        };
-      })
-    );
-
     return {
-      currentHistoryId: session.currentHistoryId,
-      entries: entriesWithTurns,
+      currentTurnId: session.currentTurnId,
+      turns,
     };
   },
 });
 
 /**
- * Time travel to a specific history entry.
+ * Time travel to a specific turn entry.
  * Does not delete any entries (branching is preserved).
  */
 export const timeTravel = mutation({
   args: {
     sessionId: v.id("sessions"),
-    targetHistoryId: v.id("sessionHistory"),
+    targetTurnId: v.id("machineTurns"),
   },
-  handler: async (ctx, { sessionId, targetHistoryId }) => {
+  handler: async (ctx, { sessionId, targetTurnId }) => {
     const session = await ctx.db.get(sessionId);
     if (!session) throw new Error("Session not found");
 
-    const targetHistory = await ctx.db.get(targetHistoryId);
-    if (!targetHistory) throw new Error("Target history entry not found");
+    const targetTurn = await ctx.db.get(targetTurnId);
+    if (!targetTurn) throw new Error("Target turn entry not found");
 
-    if (targetHistory.sessionId !== sessionId) {
-      throw new Error("Target history entry belongs to a different session");
+    if (targetTurn.sessionId !== sessionId) {
+      throw new Error("Target turn entry belongs to a different session");
     }
 
     // Update the current pointer
-    await ctx.db.patch(sessionId, { currentHistoryId: targetHistoryId });
+    await ctx.db.patch(sessionId, { currentTurnId: targetTurnId });
   },
 });

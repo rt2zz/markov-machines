@@ -9,7 +9,7 @@ export interface RunOptions {
   maxTurns?: number;
   /** Previous conversation history to include */
   history?: Message[];
-  /** Max execution steps (for cede continuation). Default 10. */
+  /** Max execution steps (for cede continuation). Default 50. */
   maxSteps?: number;
   /** Current step number (1-indexed) */
   currentStep?: number;

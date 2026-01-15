@@ -4,7 +4,7 @@ export { createNode } from "./src/core/node.js";
 export { createMachine } from "./src/core/machine.js";
 export { createTransition, createHelpers } from "./src/core/transition.js";
 export type { TransitionConfig } from "./src/core/transition.js";
-export { runMachine } from "./src/core/run.js";
+export { runMachine, runMachineToCompletion } from "./src/core/run.js";
 export { createPack } from "./src/core/pack.js";
 
 // Executors
@@ -14,6 +14,7 @@ export type {
   StandardExecutorConfig,
   RunOptions,
   RunResult,
+  MachineStep,
 } from "./src/executor/types.js";
 
 // Serialization

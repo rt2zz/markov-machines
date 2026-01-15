@@ -3,7 +3,6 @@ import {
   createCharter,
   createNode,
   createStandardExecutor,
-  createTransition,
   type Charter,
   type Node,
   type CodeTransition,
@@ -19,7 +18,7 @@ import {
   type ArchiveState,
 } from "./tools";
 import { guidancePack } from "./packs/guidance";
-import { productResearcherNode, cedeResults } from "./nodes/productResearcher";
+import { productResearcherNode } from "./nodes/productResearcher";
 
 // State validators
 export const todoStateValidator = z.object({
@@ -42,42 +41,6 @@ export const archiveStateValidator = z.object({
   ),
 });
 
-// Forward declarations for nodes (needed for transitions)
-let mainNode: Node<TodoState>;
-let archiveNode: Node<ArchiveState>;
-
-// Transitions - use type assertions for cross-state transitions
-const toArchive: CodeTransition<TodoState> = {
-  description: "View the archive of completed todos",
-  execute: (state: TodoState) => ({
-    type: "transition" as const,
-    node: archiveNode as Node<unknown>,
-    state: {
-      archivedTodos: state.todos.filter((t) => t.completed),
-    },
-  }),
-};
-
-const backToMain: CodeTransition<ArchiveState> = {
-  description: "Return to the main todo list",
-  execute: () => ({
-    type: "transition" as const,
-    node: mainNode as Node<unknown>,
-    state: undefined, // Use mainNode's initialState
-  }),
-};
-
-const spawnResearcher: CodeTransition<TodoState> = {
-  description: "Spawn a product researcher to investigate a product. Use when user needs help researching something to buy.",
-  arguments: z.object({
-    query: z.string().describe("What to research (e.g., 'best wool blankets', 'durable hiking boots')"),
-  }),
-  execute: async (_state, ctx, { spawn }) => {
-    const args = ctx.args as { query: string };
-    return spawn(productResearcherNode, { query: args.query, findings: [] }) as ReturnType<typeof spawn>;
-  },
-};
-
 // Create charter with single executor
 export const todoCharter: Charter = createCharter({
   name: "todo-assistant",
@@ -85,19 +48,13 @@ export const todoCharter: Charter = createCharter({
     apiKey: process.env.ANTHROPIC_API_KEY,
     model: "claude-sonnet-4-20250514",
     maxTokens: 1024 * 10,
-    debug: true,
+    debug: false,
   }),
-  transitions: {
-    toArchive,
-    backToMain,
-    spawnResearcher,
-    cedeResults,
-  },
   packs: [guidancePack],
 });
 
-// Create main node - tools are inline on the node
-mainNode = createNode<TodoState>({
+// Create main node - tools and transitions are inline
+const mainNode = createNode<TodoState>({
   instructions: `You are a helpful todo assistant. Help users manage their todos.
 
 Available actions:
@@ -122,15 +79,33 @@ Be concise and helpful.`,
   },
   validator: todoStateValidator,
   transitions: {
-    toArchive: { ref: "toArchive" },
-    spawnResearcher: { ref: "spawnResearcher" },
+    toArchive: {
+      description: "View the archive of completed todos",
+      execute: (state: TodoState) => ({
+        type: "transition" as const,
+        node: archiveNode as Node<unknown>,
+        state: {
+          archivedTodos: state.todos.filter((t) => t.completed),
+        },
+      }),
+    } as CodeTransition<TodoState>,
+    spawnResearcher: {
+      description: "Spawn a product researcher to investigate a product. Use when user needs help researching something to buy.",
+      arguments: z.object({
+        query: z.string().describe("What to research (e.g., 'best wool blankets', 'durable hiking boots')"),
+      }),
+      execute: async (_state, ctx, { spawn }) => {
+        const args = ctx.args as { query: string };
+        return spawn(productResearcherNode, { query: args.query, findings: [] }) as ReturnType<typeof spawn>;
+      },
+    } as CodeTransition<TodoState>,
   },
   packs: [guidancePack],
   initialState: { todos: [] },
 });
 
 // Create archive node
-archiveNode = createNode<ArchiveState>({
+const archiveNode = createNode<ArchiveState>({
   instructions: `You are viewing the archive of completed todos.
 
 Available actions:
@@ -146,7 +121,14 @@ Be concise and helpful.`,
   },
   validator: archiveStateValidator,
   transitions: {
-    backToMain: { ref: "backToMain" },
+    backToMain: {
+      description: "Return to the main todo list",
+      execute: () => ({
+        type: "transition" as const,
+        node: mainNode as Node<unknown>,
+        state: undefined, // Use mainNode's initialState
+      }),
+    } as CodeTransition<ArchiveState>,
   },
   initialState: { archivedTodos: [] },
 });

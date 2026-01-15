@@ -25,7 +25,11 @@ export function generateToolDefinitions<S>(
   const seenNames = new Set<string>();
 
   // 1. Add updateState tool
-  const stateSchema = z.toJSONSchema(node.validator, { target: "openapi-3.0" });
+  const patchValidator =
+    typeof (node.validator as { partial?: () => z.ZodTypeAny }).partial === "function"
+      ? (node.validator as z.ZodObject<Record<string, z.ZodTypeAny>>).partial()
+      : node.validator;
+  const stateSchema = z.toJSONSchema(patchValidator, { target: "openapi-3.0" });
   tools.push({
     name: "updateState",
     description:

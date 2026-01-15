@@ -47,13 +47,6 @@ export function ModalProvider({ children }: { children: ReactNode }) {
     prevPathname.current = pathname;
   }, [pathname]);
 
-  // Initialize lastNonModalPath on mount
-  useEffect(() => {
-    if (!isModalRoute(pathname)) {
-      lastNonModalPath.current = pathname;
-    }
-  }, []);
-
   const closeModal = useCallback(
     (fallback: string = "/") => {
       if (enteredViaInterception.current) {

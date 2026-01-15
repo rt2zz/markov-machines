@@ -18,17 +18,6 @@ const researcherStateValidator = z.object({
 
 export type ResearcherState = z.infer<typeof researcherStateValidator>;
 
-// Transition to cede results back to parent
-export const cedeResults: CodeTransition<ResearcherState> = {
-  description: "Return findings to the main assistant. Use when research is complete or you need user input.",
-  execute: async (state, _ctx, { cede }) => {
-    return cede({
-      query: state.query,
-      findings: state.findings,
-    });
-  },
-};
-
 // Anthropic's built-in web search tool
 const webSearchTool: AnthropicBuiltinTool = {
   type: "anthropic-builtin",
@@ -66,7 +55,15 @@ Be thorough but focused. Prioritize findings that match the user's preferences f
     },
   },
   transitions: {
-    cedeResults: { ref: "cedeResults" },
+    cedeResults: {
+      description: "Return findings to the main assistant. Use when research is complete or you need user input.",
+      execute: async (state, _ctx, { cede }) => {
+        return cede({
+          query: state.query,
+          findings: state.findings,
+        });
+      },
+    } as CodeTransition<ResearcherState>,
   },
   packs: [guidancePack],
   initialState: { query: "", findings: [] },

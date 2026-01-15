@@ -270,7 +270,7 @@ export class StandardExecutor implements Executor {
               toolResults.push(toolResult(id, `Pack not found: ${packName}`, true));
               continue;
             }
-            const packState = packStates[packName];
+            const packState = packStates[packName] ?? pack.initialState;
 
             // Execute pack tool with pack context
             try {
@@ -279,7 +279,7 @@ export class StandardExecutor implements Executor {
                 state: packState,
                 updateState: (patch: Partial<unknown>) => {
                   // Validate and update pack state
-                  const merged = { ...(packState as object), ...patch };
+                  const merged = { ...(packState ?? {}), ...patch };
                   const parseResult = pack.validator.safeParse(merged);
                   if (parseResult.success) {
                     packStates[packName] = parseResult.data;
