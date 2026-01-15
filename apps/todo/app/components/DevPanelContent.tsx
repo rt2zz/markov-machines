@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { useSessionId } from "../../src/hooks";
+import { useSessionId, useDevMode } from "../../src/hooks";
 import { useModalClose } from "./ModalContext";
 
 type Screen = "overview" | "state" | "history" | "nodes" | "packs";
@@ -25,13 +25,14 @@ interface DevPanelContentProps {
 export function DevPanelContent({ screen, isModal }: DevPanelContentProps) {
   const closeModal = useModalClose();
   const [sessionId] = useSessionId(null);
+  const [devMode, setDevMode] = useDevMode();
 
   const session = useQuery(
     api.sessions.get,
     sessionId ? { id: sessionId } : "skip"
   );
-  const historyTree = useQuery(
-    api.sessions.getHistoryTree,
+  const turnTree = useQuery(
+    api.sessions.getTurnTree,
     sessionId ? { sessionId } : "skip"
   );
   const todos = useQuery(api.todos.list);
@@ -90,10 +91,10 @@ export function DevPanelContent({ screen, isModal }: DevPanelContentProps) {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         {screen === "overview" && (
-          <OverviewScreen session={session} historyTree={historyTree} todos={todos} />
+          <OverviewScreen session={session} turnTree={turnTree} todos={todos} devMode={devMode} setDevMode={setDevMode} />
         )}
         {screen === "state" && <StateScreen session={session} />}
-        {screen === "history" && <HistoryScreen historyTree={historyTree} />}
+        {screen === "history" && <HistoryScreen turnTree={turnTree} />}
         {screen === "nodes" && <NodesScreen session={session} />}
         {screen === "packs" && <PacksScreen session={session} />}
       </div>
@@ -120,45 +121,70 @@ interface SerializedInstance {
 
 interface SessionData {
   sessionId: string;
-  historyId: string;
+  turnId: string;
   instanceId: string;
   instance: SerializedInstance;
-  turn: { messages: unknown[]; createdAt: number } | null;
+  messages: unknown[];
   createdAt: number;
 }
 
-interface HistoryEntry {
+interface TurnEntry {
   _id: string;
   sessionId: string;
   parentId: string | null;
   instanceId: string;
   instance: SerializedInstance;
+  messages: unknown[];
   createdAt: number;
-  turn: { messages: unknown[] } | null;
 }
 
-interface HistoryTree {
-  currentHistoryId: string;
-  entries: HistoryEntry[];
+interface TurnTree {
+  currentTurnId: string;
+  turns: TurnEntry[];
 }
 
 // Screen Components
 
 function OverviewScreen({
   session,
-  historyTree,
+  turnTree,
   todos,
+  devMode,
+  setDevMode,
 }: {
   session: unknown;
-  historyTree: unknown;
+  turnTree: unknown;
   todos: unknown[] | undefined;
+  devMode: boolean;
+  setDevMode: (value: boolean) => void;
 }) {
   const s = session as SessionData | null;
-  const tree = historyTree as HistoryTree | null;
-  const turnCount = tree?.entries.filter(e => e.turn !== null).length ?? 0;
+  const tree = turnTree as TurnTree | null;
+  const turnCount = tree?.turns?.length ?? 0;
 
   return (
     <div className="space-y-6">
+      <Section title="Settings">
+        <div className="flex items-center justify-between rounded-lg bg-gray-100 p-3 dark:bg-gray-700">
+          <div>
+            <span className="font-medium text-gray-900 dark:text-white">Dev Mode</span>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Long-press messages to view turn steps
+            </p>
+          </div>
+          <button
+            onClick={() => setDevMode(!devMode)}
+            className={`rounded-full px-4 py-1 text-sm font-medium transition-colors ${
+              devMode
+                ? "bg-blue-600 text-white"
+                : "bg-gray-300 text-gray-700 dark:bg-gray-600 dark:text-gray-300"
+            }`}
+          >
+            {devMode ? "ON" : "OFF"}
+          </button>
+        </div>
+      </Section>
+
       <Section title="Quick Stats">
         <div className="grid grid-cols-3 gap-4">
           <StatCard label="Todos" value={todos?.length ?? 0} />
@@ -172,7 +198,7 @@ function OverviewScreen({
           {JSON.stringify(
             {
               sessionId: s?.sessionId,
-              historyId: s?.historyId,
+              turnId: s?.turnId,
               instanceId: s?.instanceId,
               createdAt: s?.createdAt ? new Date(s.createdAt).toISOString() : null,
             },
@@ -201,22 +227,22 @@ function StateScreen({ session }: { session: unknown }) {
   );
 }
 
-function HistoryScreen({ historyTree }: { historyTree: unknown }) {
-  const tree = historyTree as HistoryTree | null;
-  const entries = tree?.entries ?? [];
+function HistoryScreen({ turnTree }: { turnTree: unknown }) {
+  const tree = turnTree as TurnTree | null;
+  const turns = tree?.turns ?? [];
 
   return (
     <div className="space-y-6">
-      <Section title={`Turn History (${entries.length} entries)`}>
-        {entries.length === 0 ? (
+      <Section title={`Turn History (${turns.length} entries)`}>
+        {turns.length === 0 ? (
           <p className="text-gray-500 dark:text-gray-400">No history yet</p>
         ) : (
           <div className="space-y-4">
-            {entries.map((entry, i) => (
+            {turns.map((turn, i) => (
               <div
-                key={entry._id}
+                key={turn._id}
                 className={`rounded border p-3 ${
-                  entry._id === tree?.currentHistoryId
+                  turn._id === tree?.currentTurnId
                     ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
                     : "border-gray-200 dark:border-gray-700"
                 }`}
@@ -224,23 +250,23 @@ function HistoryScreen({ historyTree }: { historyTree: unknown }) {
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm font-medium">
                     Turn {i + 1}
-                    {entry._id === tree?.currentHistoryId && (
+                    {turn._id === tree?.currentTurnId && (
                       <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
                         (current)
                       </span>
                     )}
                   </span>
                   <span className="text-xs text-gray-500">
-                    {new Date(entry.createdAt).toLocaleTimeString()}
+                    {new Date(turn.createdAt).toLocaleTimeString()}
                   </span>
                 </div>
                 <div className="mb-2 text-xs text-gray-500">
-                  Instance: {entry.instanceId.slice(0, 8)}...
+                  Instance: {turn.instanceId.slice(0, 8)}...
                   {" | "}
-                  Node: {getNodeName(entry.instance?.node)}
+                  Node: {getNodeName(turn.instance?.node)}
                 </div>
-                {entry.turn ? (
-                  <Pre>{JSON.stringify(entry.turn.messages, null, 2)}</Pre>
+                {turn.messages && turn.messages.length > 0 ? (
+                  <Pre>{JSON.stringify(turn.messages, null, 2)}</Pre>
                 ) : (
                   <p className="text-xs text-gray-400">Initial state (no messages)</p>
                 )}

@@ -13,8 +13,15 @@ import {
   type Instance,
   type Node,
   type Message,
+  type MachineStep,
 } from "markov-machines";
 import { todoCharter, mainNode, createInitialState } from "../src/agent/charter";
+
+// Helper to extract truncated node instructions from instance
+function getActiveNodeInstructions(instance: Instance): string {
+  const instructions = instance.node.instructions || "";
+  return instructions.slice(0, 100);
+}
 
 export const send = action({
   args: {
@@ -47,35 +54,67 @@ export const send = action({
       content: message,
     });
 
-    // Run agent
-    const result = await runMachine(machine, message);
-
-    // Serialize the instance for storage
-    const serializedInstance = serializeInstance(result.instance, todoCharter);
-
-    // Always create a new turn (regardless of whether transition occurred)
-    await ctx.runMutation(api.sessions.addTurn, {
+    // Create turn entry first (to get turnId for steps)
+    // This also updates session.currentTurnId
+    const turnId = await ctx.runMutation(api.machineTurns.create, {
       sessionId,
-      instanceId: result.instance.id,
-      instance: serializedInstance,
-      messages: result.messages,
+      parentId: session.turnId,
+      instanceId: machine.instance.id,
+      instance: serializeInstance(machine.instance, todoCharter),
+    });
+
+    let stepNumber = 0;
+    let lastStep: MachineStep | null = null;
+    const allMessages: Message[] = [];
+
+    // Iterate through each step and store it
+    for await (const step of runMachine(machine, message, { maxSteps: 10 })) {
+      stepNumber++;
+      allMessages.push(...step.messages);
+
+      // Store each step with full instance snapshot
+      await ctx.runMutation(api.machineSteps.add, {
+        sessionId,
+        turnId,
+        stepNumber,
+        stopReason: step.stopReason,
+        response: step.response,
+        done: step.done,
+        messages: step.messages,
+        instance: serializeInstance(step.instance, todoCharter),
+        activeNodeInstructions: getActiveNodeInstructions(step.instance),
+      });
+
+      lastStep = step;
+    }
+
+    if (!lastStep) {
+      throw new Error("No steps executed");
+    }
+
+    // Finalize turn with final instance and accumulated messages
+    await ctx.runMutation(api.sessions.finalizeTurn, {
+      turnId,
+      instance: serializeInstance(lastStep.instance, todoCharter),
+      messages: allMessages,
     });
 
     // Sync todos to Convex (if state has todos)
-    const currentState = result.instance.state;
+    const currentState = lastStep.instance.state;
     if (currentState && typeof currentState === "object" && "todos" in currentState) {
       const todos = (currentState as { todos: Array<{ id: string; text: string; completed: boolean }> }).todos;
       await ctx.runMutation(api.todos.sync, { todos });
     }
 
-    // Add assistant message to UI
+    // Add assistant message to UI (linked to turn for debugging)
     await ctx.runMutation(api.messages.add, {
       sessionId,
       role: "assistant",
-      content: result.response,
+      content: lastStep.response,
+      turnId,
     });
 
-    return result.response;
+    return lastStep.response;
   },
 });
 

@@ -16,12 +16,14 @@ export const add = mutation({
     sessionId: v.id("sessions"),
     role: v.union(v.literal("user"), v.literal("assistant")),
     content: v.string(),
+    turnId: v.optional(v.id("machineTurns")),
   },
-  handler: async (ctx, { sessionId, role, content }) => {
+  handler: async (ctx, { sessionId, role, content, turnId }) => {
     return await ctx.db.insert("messages", {
       sessionId,
       role,
       content,
+      turnId,
       createdAt: Date.now(),
     });
   },

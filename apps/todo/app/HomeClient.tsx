@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
-import { useSessionId } from "../src/hooks";
+import { useSessionId, useDevMode } from "../src/hooks";
 import { ChatMessage } from "./components/ChatMessage";
 import { ChatInput } from "./components/ChatInput";
+import { ThinkingIndicator } from "./components/ThinkingIndicator";
+import { MessageDebugModal } from "./components/MessageDebugModal";
 import type { Id } from "../convex/_generated/dataModel";
 
 export function HomeClient({
@@ -17,6 +19,9 @@ export function HomeClient({
   const router = useRouter();
   const [sessionId, setSessionId] = useSessionId(initialSessionId);
   const [sending, setSending] = useState(false);
+  const [sendStartTime, setSendStartTime] = useState<number | null>(null);
+  const [devMode] = useDevMode();
+  const [debugTurnId, setDebugTurnId] = useState<Id<"machineTurns"> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const createSession = useAction(api.chat.createSession);
@@ -71,6 +76,7 @@ export function HomeClient({
 
   const handleSend = async (message: string) => {
     if (!sessionId) return;
+    setSendStartTime(Date.now());
     setSending(true);
     try {
       await sendMessage({ sessionId, message });
@@ -78,6 +84,7 @@ export function HomeClient({
       console.error("Error sending message:", error);
     } finally {
       setSending(false);
+      setSendStartTime(null);
     }
   };
 
@@ -149,16 +156,13 @@ export function HomeClient({
                 key={msg._id}
                 role={msg.role}
                 content={msg.content}
+                turnId={msg.turnId}
+                devMode={devMode}
+                onLongPress={setDebugTurnId}
               />
             ))}
-            {sending && (
-              <div className="flex justify-start">
-                <div className="rounded-lg bg-gray-200 px-4 py-2 dark:bg-gray-700">
-                  <p className="text-gray-500 dark:text-gray-400">
-                    Thinking...
-                  </p>
-                </div>
-              </div>
+            {sending && sessionId && sendStartTime && (
+              <ThinkingIndicator sessionId={sessionId} startTime={sendStartTime} />
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -171,6 +175,14 @@ export function HomeClient({
           </div>
         </div>
       </main>
+
+      {/* Message Debug Modal */}
+      {debugTurnId && (
+        <MessageDebugModal
+          turnId={debugTurnId}
+          onClose={() => setDebugTurnId(null)}
+        />
+      )}
     </div>
   );
 }
