@@ -22,9 +22,9 @@ export interface RunResult {
   /** New messages from this turn */
   messages: Message[];
   /** Why the run stopped */
-  stopReason: "end_turn" | "max_tokens" | "yield";
-  /** Payload from yield (only set when stopReason is "yield") */
-  yieldPayload?: unknown;
+  stopReason: "end_turn" | "max_tokens" | "cede";
+  /** Payload from cede (only set when stopReason is "cede") */
+  cedePayload?: unknown;
   /** Updated pack states (to be applied to root instance) */
   packStates?: Record<string, unknown>;
 }
@@ -61,4 +61,6 @@ export interface StandardExecutorConfig {
   apiKey?: string;
   model?: string;
   maxTokens?: number;
+  /** Enable debug logging for API requests/responses */
+  debug?: boolean;
 }

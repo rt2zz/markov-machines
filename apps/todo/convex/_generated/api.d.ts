@@ -12,6 +12,7 @@ import type * as chat from "../chat.js";
 import type * as messages from "../messages.js";
 import type * as sessions from "../sessions.js";
 import type * as todos from "../todos.js";
+import type * as turns from "../turns.js";
 
 import type {
   ApiFromModules,
@@ -24,6 +25,7 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   sessions: typeof sessions;
   todos: typeof todos;
+  turns: typeof turns;
 }>;
 
 /**

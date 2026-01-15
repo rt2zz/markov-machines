@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "./ConvexClientProvider";
+import { DevIndicator } from "./components/DevIndicator";
+import { ModalProvider } from "./components/ModalContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,17 +22,23 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
+  modal,
 }: Readonly<{
   children: React.ReactNode;
+  modal: React.ReactNode;
 }>) {
-  console.log('key', process.env.ANTHROPIC_API_KEY)
-
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ConvexClientProvider>{children}</ConvexClientProvider>
+        <ConvexClientProvider>
+          <ModalProvider>
+            {children}
+            {modal}
+            <DevIndicator />
+          </ModalProvider>
+        </ConvexClientProvider>
       </body>
     </html>
   );

@@ -16,7 +16,7 @@ import type { Transition } from "../types/transitions.js";
 import {
   isTransitionToResult,
   isSpawnResult,
-  isYieldResult,
+  isCedeResult,
 } from "../types/transitions.js";
 import {
   userMessage,
@@ -52,6 +52,7 @@ export class StandardExecutor implements Executor {
   constructor(config: StandardExecutorConfig = {}) {
     this.client = new Anthropic({
       apiKey: config.apiKey,
+      logLevel: config.debug ? "debug" : undefined,
     });
     this.model = config.model ?? "claude-sonnet-4-20250514";
     this.maxTokens = config.maxTokens ?? 4096;
@@ -97,8 +98,8 @@ export class StandardExecutor implements Executor {
     conversationHistory.push({ role: "user", content: input });
 
     let turns = 0;
-    let stopReason: "end_turn" | "max_tokens" | "yield" = "end_turn";
-    let yieldPayload: unknown = undefined;
+    let stopReason: "end_turn" | "max_tokens" | "cede" = "end_turn";
+    let cedePayload: unknown = undefined;
 
     while (turns < maxTurns) {
       turns++;
@@ -120,16 +121,26 @@ export class StandardExecutor implements Executor {
       );
 
       // Call Claude API
+      // Separate built-in tools from custom tools
+      const anthropicTools = tools.map((t) => {
+        // Built-in tools have a 'type' field but no 'input_schema'
+        if ("type" in t && !("input_schema" in t)) {
+          return t as unknown as Anthropic.Messages.Tool;
+        }
+        // Custom tools need the standard format
+        return {
+          name: t.name,
+          description: t.description,
+          input_schema: t.input_schema as Anthropic.Messages.Tool["input_schema"],
+        };
+      });
+
       const response = await this.client.messages.create({
         model: this.model,
         max_tokens: this.maxTokens,
         system: systemPrompt,
         messages: conversationHistory,
-        tools: tools.map((t) => ({
-          name: t.name,
-          description: t.description,
-          input_schema: t.input_schema as Anthropic.Messages.Tool["input_schema"],
-        })),
+        tools: anthropicTools,
       });
 
       // Convert response content to our format
@@ -365,10 +376,10 @@ export class StandardExecutor implements Executor {
           );
 
           // Handle discriminated union
-          if (isYieldResult(result)) {
-            // Yield: stop execution and return payload
-            stopReason = "yield";
-            yieldPayload = result.payload;
+          if (isCedeResult(result)) {
+            // Cede: stop execution and return payload
+            stopReason = "cede";
+            cedePayload = result.payload;
             break;
           }
 
@@ -431,7 +442,7 @@ export class StandardExecutor implements Executor {
       instance: updatedInstance,
       messages: newMessages,
       stopReason,
-      yieldPayload,
+      cedePayload,
       packStates: Object.keys(packStates).length > 0 ? packStates : undefined,
     };
   }

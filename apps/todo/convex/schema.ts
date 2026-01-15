@@ -9,23 +9,32 @@ export default defineSchema({
     createdAt: v.number(),
   }),
 
-  // Sessions table - tracks current position and flat history
+  // Sessions table - tracks current position
   sessions: defineTable({
-    currentNodeId: v.optional(v.id("sessionNodes")), // Points to current sessionNode (optional during creation)
-    history: v.array(v.any()), // Message[] - flat history across all nodes
+    currentHistoryId: v.optional(v.id("sessionHistory")), // Points to latest history entry
   }),
 
-  // SessionNodes table - tree of node visits with state snapshots
-  sessionNodes: defineTable({
+  // SessionHistory table - instance snapshots per turn (one per runMachine call)
+  sessionHistory: defineTable({
     sessionId: v.id("sessions"),
-    parentId: v.optional(v.id("sessionNodes")), // null for root, enables branching
-    node: v.any(), // SerialNode | Ref at this point
-    state: v.any(), // State snapshot for this node
-    enteredAt: v.number(), // Timestamp
-    transitionReason: v.optional(v.string()), // Why we transitioned here
+    parentId: v.optional(v.id("sessionHistory")), // Previous history entry (for branching/forking)
+    instanceId: v.string(), // Active instance ID that handled this turn
+    instance: v.any(), // SerializedInstance snapshot after this turn
+    createdAt: v.number(),
   })
     .index("by_session", ["sessionId"])
     .index("by_parent", ["parentId"]),
+
+  // Turns table - messages per turn (1:1 with sessionHistory)
+  turns: defineTable({
+    sessionId: v.id("sessions"),
+    historyId: v.id("sessionHistory"), // Links to corresponding history entry
+    instanceId: v.string(), // Active instance ID that handled this turn
+    messages: v.array(v.any()), // Message[] from this turn only
+    createdAt: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_history", ["historyId"]),
 
   // Messages table - for chat UI
   messages: defineTable({

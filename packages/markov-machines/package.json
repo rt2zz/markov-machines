@@ -3,9 +3,14 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/uuid": "^11.0.0"
+    "@types/uuid": "^11.0.0",
+    "vitest": "^4.0.17"
   },
   "peerDependencies": {
     "typescript": "^5"

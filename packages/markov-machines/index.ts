@@ -49,7 +49,7 @@ export type {
   TransitionResult,
   TransitionToResult,
   SpawnResult,
-  YieldResult,
+  CedeResult,
   SpawnTarget,
   TransitionHelpers,
   // Tools
@@ -90,7 +90,7 @@ export {
   transitionTo,
   isTransitionToResult,
   isSpawnResult,
-  isYieldResult,
+  isCedeResult,
   isPack,
   isPackToolDefinition,
   isAnthropicBuiltinTool,

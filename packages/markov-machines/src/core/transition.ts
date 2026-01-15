@@ -6,7 +6,7 @@ import type {
   TransitionResult,
   TransitionHelpers,
   SpawnTarget,
-  YieldResult,
+  CedeResult,
   SpawnResult,
 } from "../types/transitions.js";
 
@@ -15,8 +15,8 @@ import type {
  */
 export function createHelpers(): TransitionHelpers {
   return {
-    yield: <P = unknown>(payload?: P): YieldResult<P> => ({
-      type: "yield",
+    cede: <P = unknown>(payload?: P): CedeResult<P> => ({
+      type: "cede",
       payload,
     }),
     spawn: <T = unknown>(
@@ -89,10 +89,10 @@ export function createTransition<S>(
  * });
  *
  * @example
- * // Yield to parent
+ * // Cede to parent
  * const complete = createTransition({
- *   description: "Complete and yield",
- *   execute: (state, ctx, { yield: yieldFn }) => yieldFn({ result: state.result }),
+ *   description: "Complete and cede",
+ *   execute: (state, ctx, { cede }) => cede({ result: state.result }),
  * });
  */
 export function createTransition<S>(

@@ -117,7 +117,7 @@ export function generateToolDefinitions<S>(
 
     // Handle Anthropic built-in tools (server-side)
     if (isAnthropicBuiltinTool(tool)) {
-      tools.push({ type: tool.builtinType } as unknown as AnthropicToolDefinition);
+      tools.push({ type: tool.builtinType, name: tool.name } as unknown as AnthropicToolDefinition);
       seenNames.add(name);
       continue;
     }
@@ -143,7 +143,7 @@ export function generateToolDefinitions<S>(
 
       // Handle Anthropic built-in tools (server-side)
       if (isAnthropicBuiltinTool(tool)) {
-        tools.push({ type: tool.builtinType } as unknown as AnthropicToolDefinition);
+        tools.push({ type: tool.builtinType, name: tool.name } as unknown as AnthropicToolDefinition);
         seenNames.add(name);
         continue;
       }

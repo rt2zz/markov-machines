@@ -8,7 +8,7 @@ import { guidancePack } from "../packs/guidance";
 
 /**
  * Product researcher node - researches products using web search.
- * Spawned from main node, yields back with findings.
+ * Spawned from main node, cedes back with findings.
  */
 
 const researcherStateValidator = z.object({
@@ -18,11 +18,11 @@ const researcherStateValidator = z.object({
 
 export type ResearcherState = z.infer<typeof researcherStateValidator>;
 
-// Transition to yield results back to parent
-export const yieldResults: CodeTransition<ResearcherState> = {
+// Transition to cede results back to parent
+export const cedeResults: CodeTransition<ResearcherState> = {
   description: "Return findings to the main assistant. Use when research is complete or you need user input.",
-  execute: async (state, _ctx, { yield: yieldFn }) => {
-    return yieldFn({
+  execute: async (state, _ctx, { cede }) => {
+    return cede({
       query: state.query,
       findings: state.findings,
     });
@@ -45,7 +45,7 @@ Your job:
 3. Use recordFinding to save important findings as you go
 4. Check the guidance pack for user preferences (materials, quality, budget, etc.)
 
-When you have gathered enough information OR need clarification from the user, use yieldResults to return your findings to the main assistant.
+When you have gathered enough information OR need clarification from the user, use cedeResults to return your findings to the main assistant.
 
 Be thorough but focused. Prioritize findings that match the user's preferences from the guidance pack.`,
   validator: researcherStateValidator,
@@ -66,7 +66,7 @@ Be thorough but focused. Prioritize findings that match the user's preferences f
     },
   },
   transitions: {
-    yieldResults: { ref: "yieldResults" },
+    cedeResults: { ref: "cedeResults" },
   },
   packs: [guidancePack],
   initialState: { query: "", findings: [] },

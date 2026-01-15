@@ -21,7 +21,7 @@ export type {
   TransitionResult,
   TransitionToResult,
   SpawnResult,
-  YieldResult,
+  CedeResult,
   SpawnTarget,
   TransitionHelpers,
 } from "./transitions.js";
@@ -32,7 +32,7 @@ export {
   transitionHasArguments,
   isTransitionToResult,
   isSpawnResult,
-  isYieldResult,
+  isCedeResult,
 } from "./transitions.js";
 
 // State

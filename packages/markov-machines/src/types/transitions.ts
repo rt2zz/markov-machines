@@ -38,11 +38,11 @@ export interface SpawnResult<T = unknown> {
 }
 
 /**
- * Yield - return control to parent with optional payload.
- * The yielding instance is REMOVED from the tree.
+ * Cede - return control to parent with optional payload.
+ * The ceding instance is REMOVED from the tree.
  */
-export interface YieldResult<P = unknown> {
-  type: "yield";
+export interface CedeResult<P = unknown> {
+  type: "cede";
   payload?: P;
 }
 
@@ -52,17 +52,17 @@ export interface YieldResult<P = unknown> {
 export type TransitionResult<T = unknown> =
   | TransitionToResult<T>
   | SpawnResult<T>
-  | YieldResult;
+  | CedeResult;
 
 /**
  * Helpers provided to transition execute functions.
  */
 export interface TransitionHelpers {
   /**
-   * Yield control back to parent with optional payload.
+   * Cede control back to parent with optional payload.
    * The current instance is REMOVED from the tree.
    */
-  yield: <P = unknown>(payload?: P) => YieldResult<P>;
+  cede: <P = unknown>(payload?: P) => CedeResult<P>;
 
   /**
    * Spawn one or more child instances.
@@ -149,14 +149,14 @@ export function isSpawnResult(value: unknown): value is SpawnResult {
 }
 
 /**
- * Type guard for YieldResult
+ * Type guard for CedeResult
  */
-export function isYieldResult(value: unknown): value is YieldResult {
+export function isCedeResult(value: unknown): value is CedeResult {
   return (
     typeof value === "object" &&
     value !== null &&
     "type" in value &&
-    (value as YieldResult).type === "yield"
+    (value as CedeResult).type === "cede"
   );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useSessionId } from "../src/hooks";
@@ -13,6 +14,7 @@ export function HomeClient({
 }: {
   initialSessionId: Id<"sessions"> | null;
 }) {
+  const router = useRouter();
   const [sessionId, setSessionId] = useSessionId(initialSessionId);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -54,6 +56,18 @@ export function HomeClient({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Dev panel keyboard shortcut (Option + D)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.code === "KeyD") {
+        e.preventDefault();
+        router.push("/dev/overview");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [router]);
 
   const handleSend = async (message: string) => {
     if (!sessionId) return;

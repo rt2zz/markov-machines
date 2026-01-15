@@ -3,159 +3,207 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 
 /**
- * Create a new session with root sessionNode.
+ * Create a new session with initial history entry (no turn yet).
  */
 export const create = mutation({
   args: {
-    node: v.any(), // SerialNode | Ref
-    state: v.any(), // Initial state
+    instanceId: v.string(),
+    instance: v.any(), // SerializedInstance
   },
-  handler: async (ctx, args) => {
-    // Create session first (without currentNodeId - we'll update it)
+  handler: async (ctx, { instanceId, instance }) => {
+    // Create session first
     const sessionId = await ctx.db.insert("sessions", {
-      currentNodeId: undefined, // Will be set after creating sessionNode
-      history: [],
+      currentHistoryId: undefined,
     });
 
-    // Create root sessionNode
-    const sessionNodeId = await ctx.db.insert("sessionNodes", {
+    // Create initial history entry
+    const historyId = await ctx.db.insert("sessionHistory", {
       sessionId,
-      parentId: undefined, // Root node has no parent
-      node: args.node,
-      state: args.state,
-      enteredAt: Date.now(),
-      transitionReason: undefined,
+      parentId: undefined,
+      instanceId,
+      instance,
+      createdAt: Date.now(),
     });
 
-    // Update session with the correct currentNodeId
-    await ctx.db.patch(sessionId, { currentNodeId: sessionNodeId });
+    // Update session to point to initial history
+    await ctx.db.patch(sessionId, { currentHistoryId: historyId });
 
     return sessionId;
   },
 });
 
 /**
- * Get session with current sessionNode data.
+ * Get session with current history entry data.
  */
 export const get = query({
   args: { id: v.id("sessions") },
   handler: async (ctx, { id }) => {
     const session = await ctx.db.get(id);
-    if (!session || !session.currentNodeId) return null;
+    if (!session || !session.currentHistoryId) return null;
 
-    const currentNode = await ctx.db.get(session.currentNodeId);
-    if (!currentNode) return null;
+    const currentHistory = await ctx.db.get(session.currentHistoryId);
+    if (!currentHistory) return null;
+
+    // Get the turn for this history entry (if any)
+    const turn = await ctx.db
+      .query("turns")
+      .withIndex("by_history", (q) => q.eq("historyId", session.currentHistoryId!))
+      .first();
 
     return {
       sessionId: id,
-      node: currentNode.node,
-      state: currentNode.state,
-      history: session.history,
-      currentNodeId: session.currentNodeId,
-      enteredAt: currentNode.enteredAt,
+      historyId: session.currentHistoryId,
+      instanceId: currentHistory.instanceId,
+      instance: currentHistory.instance,
+      turn: turn ? { messages: turn.messages, createdAt: turn.createdAt } : null,
+      createdAt: currentHistory.createdAt,
     };
   },
 });
 
 /**
- * Get all sessionNodes for a session (for time travel UI).
+ * Add a new turn after runMachine.
+ * Creates both sessionHistory and turns entries.
  */
-export const getTree = query({
+export const addTurn = mutation({
+  args: {
+    sessionId: v.id("sessions"),
+    instanceId: v.string(),
+    instance: v.any(), // SerializedInstance
+    messages: v.array(v.any()), // Message[] from this turn
+  },
+  handler: async (ctx, { sessionId, instanceId, instance, messages }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session) throw new Error("Session not found");
+
+    const now = Date.now();
+
+    // Create history entry
+    const historyId = await ctx.db.insert("sessionHistory", {
+      sessionId,
+      parentId: session.currentHistoryId,
+      instanceId,
+      instance,
+      createdAt: now,
+    });
+
+    // Create turn entry
+    await ctx.db.insert("turns", {
+      sessionId,
+      historyId,
+      instanceId,
+      messages,
+      createdAt: now,
+    });
+
+    // Update session pointer
+    await ctx.db.patch(sessionId, { currentHistoryId: historyId });
+
+    return historyId;
+  },
+});
+
+/**
+ * Get full message history by walking the parentId chain.
+ */
+export const getFullHistory = query({
+  args: { sessionId: v.id("sessions") },
+  handler: async (ctx, { sessionId }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session?.currentHistoryId) return [];
+
+    // Get all history entries for this session
+    const allEntries = await ctx.db
+      .query("sessionHistory")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .collect();
+
+    // Build a map for quick lookup
+    const entryMap = new Map(allEntries.map((e) => [e._id, e]));
+
+    // Walk from current back to root
+    const orderedEntries: typeof allEntries = [];
+    let currentId: Id<"sessionHistory"> | undefined = session.currentHistoryId;
+
+    while (currentId) {
+      const entry = entryMap.get(currentId);
+      if (!entry) break;
+      orderedEntries.unshift(entry);
+      currentId = entry.parentId ?? undefined;
+    }
+
+    // Join turns and collect messages
+    const messages: unknown[] = [];
+    for (const entry of orderedEntries) {
+      const turn = await ctx.db
+        .query("turns")
+        .withIndex("by_history", (q) => q.eq("historyId", entry._id))
+        .first();
+      if (turn) {
+        messages.push(...turn.messages);
+      }
+    }
+
+    return messages;
+  },
+});
+
+/**
+ * Get all history entries for a session (for time travel UI).
+ */
+export const getHistoryTree = query({
   args: { sessionId: v.id("sessions") },
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get(sessionId);
     if (!session) return null;
 
-    const nodes = await ctx.db
-      .query("sessionNodes")
+    const entries = await ctx.db
+      .query("sessionHistory")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
       .collect();
 
+    // Get turns for each entry
+    const entriesWithTurns = await Promise.all(
+      entries.map(async (entry) => {
+        const turn = await ctx.db
+          .query("turns")
+          .withIndex("by_history", (q) => q.eq("historyId", entry._id))
+          .first();
+        return {
+          ...entry,
+          turn: turn ? { messages: turn.messages } : null,
+        };
+      })
+    );
+
     return {
-      currentNodeId: session.currentNodeId,
-      nodes,
+      currentHistoryId: session.currentHistoryId,
+      entries: entriesWithTurns,
     };
   },
 });
 
 /**
- * Update current sessionNode's state and session history (within same node).
- */
-export const update = mutation({
-  args: {
-    sessionId: v.id("sessions"),
-    state: v.any(),
-    history: v.array(v.any()),
-  },
-  handler: async (ctx, { sessionId, state, history }) => {
-    const session = await ctx.db.get(sessionId);
-    if (!session) throw new Error("Session not found");
-
-    // Update the current sessionNode's state
-    await ctx.db.patch(session.currentNodeId, { state });
-
-    // Update session history
-    await ctx.db.patch(sessionId, { history });
-  },
-});
-
-/**
- * Create a new sessionNode for a transition.
- * Creates a child of the current node.
- */
-export const transition = mutation({
-  args: {
-    sessionId: v.id("sessions"),
-    node: v.any(), // New SerialNode | Ref
-    state: v.any(), // New state
-    reason: v.optional(v.string()),
-    history: v.array(v.any()),
-  },
-  handler: async (ctx, { sessionId, node, state, reason, history }) => {
-    const session = await ctx.db.get(sessionId);
-    if (!session) throw new Error("Session not found");
-
-    // Create new sessionNode as child of current
-    const newNodeId = await ctx.db.insert("sessionNodes", {
-      sessionId,
-      parentId: session.currentNodeId,
-      node,
-      state,
-      enteredAt: Date.now(),
-      transitionReason: reason,
-    });
-
-    // Update session to point to new node and update history
-    await ctx.db.patch(sessionId, {
-      currentNodeId: newNodeId,
-      history,
-    });
-
-    return newNodeId;
-  },
-});
-
-/**
- * Time travel to a specific sessionNode.
- * Does not delete any nodes (branching is preserved).
+ * Time travel to a specific history entry.
+ * Does not delete any entries (branching is preserved).
  */
 export const timeTravel = mutation({
   args: {
     sessionId: v.id("sessions"),
-    targetNodeId: v.id("sessionNodes"),
+    targetHistoryId: v.id("sessionHistory"),
   },
-  handler: async (ctx, { sessionId, targetNodeId }) => {
+  handler: async (ctx, { sessionId, targetHistoryId }) => {
     const session = await ctx.db.get(sessionId);
     if (!session) throw new Error("Session not found");
 
-    const targetNode = await ctx.db.get(targetNodeId);
-    if (!targetNode) throw new Error("Target node not found");
+    const targetHistory = await ctx.db.get(targetHistoryId);
+    if (!targetHistory) throw new Error("Target history entry not found");
 
-    if (targetNode.sessionId !== sessionId) {
-      throw new Error("Target node belongs to a different session");
+    if (targetHistory.sessionId !== sessionId) {
+      throw new Error("Target history entry belongs to a different session");
     }
 
-    // Just update the current pointer - no deletion
-    await ctx.db.patch(sessionId, { currentNodeId: targetNodeId });
+    // Update the current pointer
+    await ctx.db.patch(sessionId, { currentHistoryId: targetHistoryId });
   },
 });

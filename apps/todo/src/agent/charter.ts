@@ -19,7 +19,7 @@ import {
   type ArchiveState,
 } from "./tools";
 import { guidancePack } from "./packs/guidance";
-import { productResearcherNode, yieldResults } from "./nodes/productResearcher";
+import { productResearcherNode, cedeResults } from "./nodes/productResearcher";
 
 // State validators
 export const todoStateValidator = z.object({
@@ -84,13 +84,14 @@ export const todoCharter: Charter = createCharter({
   executor: createStandardExecutor({
     apiKey: process.env.ANTHROPIC_API_KEY,
     model: "claude-sonnet-4-20250514",
-    maxTokens: 1024,
+    maxTokens: 1024 * 10,
+    debug: true,
   }),
   transitions: {
     toArchive,
     backToMain,
     spawnResearcher,
-    yieldResults,
+    cedeResults,
   },
   packs: [guidancePack],
 });
