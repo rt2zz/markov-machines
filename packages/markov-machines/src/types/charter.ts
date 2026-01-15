@@ -15,12 +15,15 @@ export interface CharterConfig {
   /** Registered tools (for ref-based lookup, available to all nodes) */
   tools?: Record<string, AnyToolDefinition>;
   /** Registered transitions (for ref-based lookup) */
+  // Registry holds items with heterogeneous state types, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transitions?: Record<string, Transition<any>>;
   /** Registered nodes (for ref-based lookup) */
+  // Registry holds items with heterogeneous state types, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodes?: Record<string, Node<any>>;
   /** Registered packs (reusable modules with state and tools) */
+  // Registry holds items with heterogeneous state types, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   packs?: Pack<any>[];
 }
@@ -36,12 +39,15 @@ export interface Charter {
   /** Registered tools (available to all nodes via ref resolution) */
   tools: Record<string, AnyToolDefinition>;
   /** Registered transitions */
+  // Registry holds items with heterogeneous state types, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transitions: Record<string, Transition<any>>;
   /** Registered nodes */
+  // Registry holds items with heterogeneous state types, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodes: Record<string, Node<any>>;
   /** Registered packs */
+  // Registry holds items with heterogeneous state types, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   packs: Pack<any>[];
 }

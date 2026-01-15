@@ -1,14 +1,18 @@
 import type { Machine } from "../types/machine.js";
-import type { RunOptions, RunResult } from "../executor/types.js";
+import type { RunOptions, MachineStep } from "../executor/types.js";
 import type { Instance } from "../types/instance.js";
 import { getInstancePath } from "../types/instance.js";
+import { userMessage } from "../types/messages.js";
+
+/** Check if packStates has any entries */
+const hasPackStates = (ps?: Record<string, unknown>): boolean =>
+  ps !== undefined && Object.keys(ps).length > 0;
 
 /**
  * Rebuild the tree by replacing the active instance.
  * Follows the same path that getInstancePath would follow.
  */
 function rebuildTree(
-  root: Instance,
   updatedActive: Instance,
   ancestors: Instance[],
   packStates?: Record<string, unknown>,
@@ -16,7 +20,7 @@ function rebuildTree(
   // If no ancestors, the root IS the active instance
   if (ancestors.length === 0) {
     // Apply packStates directly to root if provided
-    if (packStates && Object.keys(packStates).length > 0) {
+    if (hasPackStates(packStates)) {
       return { ...updatedActive, packStates };
     }
     return updatedActive;
@@ -41,7 +45,7 @@ function rebuildTree(
         state: ancestor.state,
         child: newChildren,
         // Apply packStates to root instance only
-        ...(isRoot && packStates && Object.keys(packStates).length > 0 ? { packStates } : {}),
+        ...(isRoot && hasPackStates(packStates) ? { packStates } : {}),
       };
     } else {
       // For single child, just replace
@@ -51,7 +55,7 @@ function rebuildTree(
         state: ancestor.state,
         child: current,
         // Apply packStates to root instance only
-        ...(isRoot && packStates && Object.keys(packStates).length > 0 ? { packStates } : {}),
+        ...(isRoot && hasPackStates(packStates) ? { packStates } : {}),
       };
     }
   }
@@ -64,7 +68,6 @@ function rebuildTree(
  * The parent becomes the new active instance.
  */
 function rebuildTreeAfterCede(
-  root: Instance,
   ancestors: Instance[],
   packStates?: Record<string, unknown>,
 ): Instance {
@@ -103,7 +106,7 @@ function rebuildTreeAfterCede(
 
   // If there's only one ancestor (the direct parent), it becomes the root
   if (ancestors.length === 1) {
-    if (packStates && Object.keys(packStates).length > 0) {
+    if (hasPackStates(packStates)) {
       return { ...updatedParent, packStates };
     }
     return updatedParent;
@@ -111,50 +114,161 @@ function rebuildTreeAfterCede(
 
   // Otherwise, rebuild the tree with the updated parent
   const remainingAncestors = ancestors.slice(0, -1);
-  return rebuildTree(root, updatedParent, remainingAncestors, packStates);
+  return rebuildTree(updatedParent, remainingAncestors, packStates);
 }
 
 /**
  * Run the machine with user input.
- * Finds the active (deepest) instance and runs it.
+ * Yields MachineStep for each inference call.
+ * Continues until there's a text response or max steps exceeded.
  */
-export async function runMachine(
+export async function* runMachine(
   machine: Machine,
   input: string,
   options?: RunOptions,
-): Promise<RunResult> {
-  // Get the active instance path (root -> active leaf)
-  const activePath = getInstancePath(machine.instance);
-  const activeInstance = activePath[activePath.length - 1];
-  const ancestors = activePath.slice(0, -1);
+): AsyncGenerator<MachineStep> {
+  let currentInstance = machine.instance;
+  let currentInput = input;
 
-  if (!activeInstance) {
-    throw new Error("No active instance found");
-  }
+  // Base history from before this run
+  const baseHistory = machine.history ?? [];
+  let currentHistory = baseHistory;
 
-  // Run the active instance with history
-  const result = await machine.charter.executor.run(
-    machine.charter,
-    activeInstance,
-    ancestors,
-    input,
-    { ...options, history: machine.history },
-  );
+  const maxSteps = options?.maxSteps ?? 50;
+  let steps = 0;
+  let tokenRecoveryAttempted = false;
 
-  // Handle cede: remove the ceded child from the tree
-  if (result.stopReason === "cede") {
-    const updatedRoot = rebuildTreeAfterCede(machine.instance, ancestors, result.packStates);
-    return {
-      ...result,
-      instance: updatedRoot,
+  while (steps < maxSteps) {
+    steps++;
+
+    // Get the active instance path (root -> active leaf)
+    const activePath = getInstancePath(currentInstance);
+    const activeInstance = activePath[activePath.length - 1];
+    const ancestors = activePath.slice(0, -1);
+
+    if (!activeInstance) {
+      throw new Error("No active instance found");
+    }
+
+    if (options?.debug) {
+      const instructions = activeInstance.node.instructions;
+      console.log(`[runMachine] Step ${steps}/${maxSteps}`);
+      console.log(`[runMachine]   Active node: ${instructions.slice(0, 50)}${instructions.length > 50 ? '...' : ''}`);
+      console.log(`[runMachine]   Ancestors: ${ancestors.length}`);
+      console.log(`[runMachine]   Input: "${currentInput.slice(0, 50)}${currentInput.length > 50 ? '...' : ''}"`);
+    }
+
+    // Run the executor (ONE API call)
+    const result = await machine.charter.executor.run(
+      machine.charter,
+      activeInstance,
+      ancestors,
+      currentInput,
+      { ...options, history: currentHistory, currentStep: steps, maxSteps },
+    );
+
+    if (options?.debug) {
+      console.log(`[runMachine]   Result stopReason: ${result.stopReason}`);
+      console.log(`[runMachine]   Result response: "${result.response.slice(0, 100)}${result.response.length > 100 ? '...' : ''}"`);
+    }
+
+    // Handle cede: rebuild tree without the ceded child
+    if (result.stopReason === "cede") {
+      currentInstance = rebuildTreeAfterCede(ancestors, result.packStates);
+
+      // Yield cede step (never final - parent needs to respond)
+      yield {
+        instance: currentInstance,
+        messages: result.messages,
+        stopReason: "cede",
+        response: result.response,
+        done: false,
+        cedePayload: result.cedePayload,
+      };
+
+      // Prepare for parent's turn with cede payload
+      if (result.cedePayload) {
+        const cedeMessage = userMessage(
+          `[Child completed: ${JSON.stringify(result.cedePayload)}]`
+        );
+        currentHistory = [...baseHistory, cedeMessage];
+      } else {
+        currentHistory = baseHistory;
+      }
+      currentInput = "";
+      continue;
+    }
+
+    // Normal case: rebuild tree with updated instance
+    currentInstance = rebuildTree(result.instance, ancestors, result.packStates);
+
+    // Handle max_tokens: give LLM one recovery chance
+    if (result.stopReason === "max_tokens" && !tokenRecoveryAttempted) {
+      tokenRecoveryAttempted = true;
+      if (options?.debug) {
+        console.log(`[runMachine] max_tokens hit, attempting recovery...`);
+      }
+
+      // Yield the partial step (not final)
+      yield {
+        instance: currentInstance,
+        messages: result.messages,
+        stopReason: result.stopReason,
+        response: result.response,
+        done: false,
+      };
+
+      // Add recovery message and continue
+      const recoveryMessage = userMessage(
+        `[System: Your response was cut off due to length limits. Please provide a brief summary of your findings and respond to the user now. Do not use any tools - just give your final answer.]`
+      );
+      currentHistory = [...currentHistory, ...result.messages, recoveryMessage];
+      currentInput = "";
+      continue;
+    }
+
+    // Determine if this is the final step
+    // end_turn is always final (LLM chose to stop)
+    // max_tokens after recovery is final (we tried our best)
+    const isFinal = result.stopReason === "end_turn" ||
+                    result.stopReason === "max_tokens";
+
+    yield {
+      instance: currentInstance,
+      messages: result.messages,
+      stopReason: result.stopReason,
+      response: result.response,
+      done: isFinal,
     };
+
+    if (isFinal) {
+      return;
+    }
+
+    // Not final - continue to next step
+    // Accumulate messages so Claude sees tool calls and results
+    currentHistory = [...currentHistory, ...result.messages];
+    currentInput = "";
   }
 
-  // Normal case: rebuild the full tree with the updated active instance
-  const updatedRoot = rebuildTree(machine.instance, result.instance, ancestors, result.packStates);
+  throw new Error(`Max steps (${maxSteps}) exceeded`);
+}
 
-  return {
-    ...result,
-    instance: updatedRoot,
-  };
+/**
+ * Run the machine to completion, returning only the final step.
+ * Convenience wrapper for cases that don't need step-by-step control.
+ */
+export async function runMachineToCompletion(
+  machine: Machine,
+  input: string,
+  options?: RunOptions,
+): Promise<MachineStep> {
+  let lastStep: MachineStep | null = null;
+  for await (const step of runMachine(machine, input, options)) {
+    lastStep = step;
+  }
+  if (!lastStep) {
+    throw new Error("No steps produced");
+  }
+  return lastStep;
 }

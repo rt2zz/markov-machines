@@ -1,2 +1,2 @@
-export { serializeNode, serializeMachine } from "./serialize.js";
-export { deserializeMachine, deserializeNode } from "./deserialize.js";
+export { serializeNode, serializeInstance, serializeMachine } from "./serialize.js";
+export { deserializeMachine, deserializeInstance, deserializeNode } from "./deserialize.js";

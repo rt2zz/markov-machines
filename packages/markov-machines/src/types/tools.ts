@@ -34,6 +34,7 @@ export interface ToolDefinition<
  * Base tool definition type for storage.
  * Uses 'any' for input/output to allow heterogeneous tool collections.
  */
+// Heterogeneous collections cannot preserve specific input/output types
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyToolDefinition<S = unknown> = ToolDefinition<any, any, S>;
 

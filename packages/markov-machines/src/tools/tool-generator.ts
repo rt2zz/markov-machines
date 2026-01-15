@@ -115,7 +115,8 @@ export function generateToolDefinitions<S>(
   for (const [name, tool] of Object.entries(node.tools)) {
     if (seenNames.has(name)) continue;
 
-    // Handle Anthropic built-in tools (server-side)
+    // Handle Anthropic built-in tools (server-side).
+    // Built-in tools have a different shape than standard tools, requiring a cast.
     if (isAnthropicBuiltinTool(tool)) {
       tools.push({ type: tool.builtinType, name: tool.name } as unknown as AnthropicToolDefinition);
       seenNames.add(name);
@@ -141,7 +142,8 @@ export function generateToolDefinitions<S>(
     for (const [name, tool] of Object.entries(ancestorNode.tools)) {
       if (seenNames.has(name)) continue; // Child already has this tool
 
-      // Handle Anthropic built-in tools (server-side)
+      // Handle Anthropic built-in tools (server-side).
+      // Built-in tools have a different shape than standard tools, requiring a cast.
       if (isAnthropicBuiltinTool(tool)) {
         tools.push({ type: tool.builtinType, name: tool.name } as unknown as AnthropicToolDefinition);
         seenNames.add(name);

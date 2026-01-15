@@ -22,6 +22,7 @@ export interface NodeConfig<S = unknown> {
   /** Optional initial state for this node */
   initialState?: S;
   /** Packs this node uses */
+  // Packs have their own state types independent of node state, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   packs?: Pack<any>[];
 }
@@ -44,6 +45,7 @@ export interface Node<S = unknown> {
   /** Optional initial state for this node */
   initialState?: S;
   /** Packs this node uses */
+  // Packs have their own state types independent of node state, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   packs?: Pack<any>[];
 }

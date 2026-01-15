@@ -37,7 +37,8 @@ export async function executeTransition<S>(
     : transition;
 
   if (!resolved) {
-    throw new Error(`Could not resolve transition`);
+    const refInfo = isRef(transition) ? `ref "${transition.ref}"` : "inline transition";
+    throw new Error(`Could not resolve transition: ${refInfo}`);
   }
 
   // Code transition - execute with helpers
@@ -66,7 +67,7 @@ export async function executeTransition<S>(
     return transitionTo(deserializeNode(charter, resolved.node));
   }
 
-  throw new Error("Unknown transition type");
+  throw new Error(`Unknown transition type: ${typeof resolved === "object" ? JSON.stringify(Object.keys(resolved)) : typeof resolved}`);
 }
 
 /**
@@ -82,6 +83,8 @@ export function deserializeNode<S>(
   const validator = z.fromJSONSchema(serialNode.validator) as z.ZodType<S>;
 
   // Resolve transition refs
+  // Charter registry stores Transition<any> since it holds transitions for nodes
+  // with different state types. Cast is required when assigning to typed record.
   const transitions: Record<string, Transition<S>> = {};
   for (const [name, trans] of Object.entries(serialNode.transitions)) {
     if (isRef(trans)) {
