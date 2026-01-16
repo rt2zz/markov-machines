@@ -3,7 +3,6 @@ import {
   createCharter,
   createNode,
   createStandardExecutor,
-  type Charter,
   type Node,
   type CodeTransition,
 } from "markov-machines";
@@ -42,7 +41,7 @@ export const archiveStateValidator = z.object({
 });
 
 // Create charter with single executor
-export const todoCharter: Charter = createCharter({
+export const todoCharter = createCharter({
   name: "todo-assistant",
   executor: createStandardExecutor({
     apiKey: process.env.ANTHROPIC_API_KEY,

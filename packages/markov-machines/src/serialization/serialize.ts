@@ -128,7 +128,9 @@ export function serializeInstance(
 /**
  * Serialize a machine for persistence.
  */
-export function serializeMachine(machine: Machine): SerializedMachine {
+export function serializeMachine(
+  machine: Machine,
+): SerializedMachine {
   return {
     instance: serializeInstance(machine.instance, machine.charter),
     history: machine.history,

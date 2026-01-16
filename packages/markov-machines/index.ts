@@ -12,6 +12,7 @@ export { StandardExecutor, createStandardExecutor } from "./src/executor/standar
 export type {
   Executor,
   StandardExecutorConfig,
+  StandardNodeConfig,
   RunOptions,
   RunResult,
   MachineStep,
@@ -52,6 +53,8 @@ export type {
   SpawnResult,
   CedeResult,
   SpawnTarget,
+  SpawnOptions,
+  TransitionToOptions,
   TransitionHelpers,
   // Tools
   ToolContext,

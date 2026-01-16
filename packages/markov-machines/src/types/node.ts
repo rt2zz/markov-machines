@@ -10,7 +10,7 @@ export type NodeToolEntry<S = unknown> = AnyToolDefinition<S> | AnthropicBuiltin
 
 /**
  * Node configuration for createNode.
- * S is the node's state type.
+ * @typeParam S - The node's state type.
  */
 export interface NodeConfig<S = unknown> {
   instructions: string;
@@ -25,11 +25,14 @@ export interface NodeConfig<S = unknown> {
   // Packs have their own state types independent of node state, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   packs?: Pack<any>[];
+  /** Per-node executor configuration (overrides executor defaults) */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  executorConfig?: Record<string, any>;
 }
 
 /**
  * Runtime node instance.
- * S is the node's state type. Node has no knowledge of Charter.
+ * @typeParam S - The node's state type. Node has no knowledge of Charter.
  */
 export interface Node<S = unknown> {
   /** Unique identifier for this node instance */
@@ -48,6 +51,9 @@ export interface Node<S = unknown> {
   // Packs have their own state types independent of node state, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   packs?: Pack<any>[];
+  /** Per-node executor configuration (overrides executor defaults) */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  executorConfig?: Record<string, any>;
 }
 
 /**

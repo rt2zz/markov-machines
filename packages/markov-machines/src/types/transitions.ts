@@ -18,6 +18,9 @@ export interface TransitionContext {
 export interface SpawnTarget<T = unknown> {
   node: Node<T>;
   state?: T;
+  /** Override executor config for this spawned instance */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  executorConfig?: Record<string, any>;
 }
 
 /**
@@ -27,6 +30,9 @@ export interface TransitionToResult<T = unknown> {
   type: "transition";
   node: Node<T>;
   state?: T;
+  /** Override executor config for this transition */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  executorConfig?: Record<string, any>;
 }
 
 /**
@@ -55,6 +61,24 @@ export type TransitionResult<T = unknown> =
   | CedeResult;
 
 /**
+ * Options for spawn helper.
+ */
+export interface SpawnOptions {
+  /** Override executor config for spawned instance(s) */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  executorConfig?: Record<string, any>;
+}
+
+/**
+ * Options for transitionTo helper.
+ */
+export interface TransitionToOptions {
+  /** Override executor config for the transition target */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  executorConfig?: Record<string, any>;
+}
+
+/**
  * Helpers provided to transition execute functions.
  */
 export interface TransitionHelpers {
@@ -71,6 +95,7 @@ export interface TransitionHelpers {
   spawn: <T = unknown>(
     nodeOrTargets: Node<T> | SpawnTarget<T>[],
     state?: T,
+    options?: SpawnOptions,
   ) => SpawnResult<T>;
 }
 
@@ -118,16 +143,22 @@ export type Transition<S = unknown> =
 export function transitionTo<T>(
   node: Node<T>,
   state?: T,
+  options?: TransitionToOptions,
 ): TransitionToResult<T> {
-  return { type: "transition", node, state };
+  return {
+    type: "transition",
+    node,
+    state,
+    executorConfig: options?.executorConfig,
+  };
 }
 
 /**
  * Type guard for TransitionToResult
  */
-export function isTransitionToResult(
+export function isTransitionToResult<T = unknown>(
   value: unknown,
-): value is TransitionToResult {
+): value is TransitionToResult<T> {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -139,7 +170,7 @@ export function isTransitionToResult(
 /**
  * Type guard for SpawnResult
  */
-export function isSpawnResult(value: unknown): value is SpawnResult {
+export function isSpawnResult<T = unknown>(value: unknown): value is SpawnResult<T> {
   return (
     typeof value === "object" &&
     value !== null &&

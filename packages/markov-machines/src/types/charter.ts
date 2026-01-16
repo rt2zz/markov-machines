@@ -6,7 +6,7 @@ import type { Pack } from "./pack.js";
 
 /**
  * Charter configuration for createCharter.
- * Charter is now purely static - a registry for serialization and ref resolution.
+ * Charter is purely static - a registry for serialization and ref resolution.
  */
 export interface CharterConfig {
   name: string;

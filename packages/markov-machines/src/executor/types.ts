@@ -80,7 +80,7 @@ export interface Executor {
 }
 
 /**
- * Configuration for StandardExecutor.
+ * Configuration for StandardExecutor constructor.
  */
 export interface StandardExecutorConfig {
   apiKey?: string;
@@ -88,4 +88,22 @@ export interface StandardExecutorConfig {
   maxTokens?: number;
   /** Enable debug logging for API requests/responses */
   debug?: boolean;
+}
+
+/**
+ * Per-node executor configuration recognized by StandardExecutor.
+ * These fields are validated at runtime.
+ *
+ * Usage in executorConfig:
+ * - model: string - Model to use (e.g., "claude-3-haiku-20240307")
+ * - maxTokens: number - Max tokens for response
+ * - temperature: number - Temperature for generation (0-1)
+ */
+export interface StandardNodeConfig {
+  /** Model to use for this node (e.g., "claude-3-haiku-20240307") */
+  model?: string;
+  /** Max tokens for response */
+  maxTokens?: number;
+  /** Temperature for generation (0-1) */
+  temperature?: number;
 }

@@ -86,6 +86,7 @@ export class StandardExecutor implements Executor {
     let currentState = instance.state;
     let currentNode = instance.node;
     let currentChildren = instance.child;
+    let currentExecutorConfig = instance.executorConfig;
     const newMessages: Message[] = [];
 
     // Build ancestor state map for tool execution
@@ -146,10 +147,30 @@ export class StandardExecutor implements Executor {
       };
     });
 
+    // Resolve effective executor config (instance > node > executor defaults)
+    const execConfig = instance.executorConfig ?? instance.node.executorConfig ?? {};
+
+    // Runtime validation of known executorConfig fields
+    if (execConfig.model !== undefined && typeof execConfig.model !== "string") {
+      throw new Error(`executorConfig.model must be a string, got ${typeof execConfig.model}`);
+    }
+    if (execConfig.maxTokens !== undefined && typeof execConfig.maxTokens !== "number") {
+      throw new Error(`executorConfig.maxTokens must be a number, got ${typeof execConfig.maxTokens}`);
+    }
+    if (execConfig.temperature !== undefined && typeof execConfig.temperature !== "number") {
+      throw new Error(`executorConfig.temperature must be a number, got ${typeof execConfig.temperature}`);
+    }
+
+    // Use validated values with defaults
+    const effectiveModel = (execConfig.model as string | undefined) ?? this.model;
+    const effectiveMaxTokens = (execConfig.maxTokens as number | undefined) ?? this.maxTokens;
+    const effectiveTemperature = execConfig.temperature as number | undefined; // undefined = use API default
+
     // Make ONE API call
     const response = await this.client.messages.create({
-      model: this.model,
-      max_tokens: this.maxTokens,
+      model: effectiveModel,
+      max_tokens: effectiveMaxTokens,
+      ...(effectiveTemperature !== undefined && { temperature: effectiveTemperature }),
       system: systemPrompt,
       messages: conversationHistory,
       tools: anthropicTools,
@@ -384,8 +405,14 @@ export class StandardExecutor implements Executor {
           cedePayload = result.payload;
         } else if (isSpawnResult(result)) {
           // Spawn: add children to current instance
-          const newChildren = result.children.map(({ node, state }) =>
-            createInstance(node, state ?? node.initialState),
+          const newChildren = result.children.map(({ node, state, executorConfig: childExecConfig }) =>
+            createInstance(
+              node,
+              state ?? node.initialState,
+              undefined, // child
+              undefined, // packStates
+              childExecConfig ?? node.executorConfig, // Apply config hierarchy
+            ),
           );
 
           // Append to existing children
@@ -413,6 +440,8 @@ export class StandardExecutor implements Executor {
               `Transition returned undefined state and target node has no initialState`,
             );
           }
+          // Update executor config: use transition override, or node default
+          currentExecutorConfig = result.executorConfig ?? currentNode.executorConfig;
           // Clear children on transition to new node
           currentChildren = undefined;
           // Return with tool_use - more work to do on new node
@@ -436,6 +465,7 @@ export class StandardExecutor implements Executor {
       currentChildren,
       ancestors,
       packStates,
+      currentExecutorConfig,
     );
 
     return {
@@ -458,6 +488,7 @@ export class StandardExecutor implements Executor {
     currentChildren: Instance | Instance[] | undefined,
     ancestors: Instance[],
     packStates: Record<string, unknown>,
+    executorConfig?: Record<string, unknown>,
   ): Instance {
     // Build the updated leaf instance
     // Include packStates only if this is the root instance (no ancestors)
@@ -468,6 +499,7 @@ export class StandardExecutor implements Executor {
       state: currentState,
       child: currentChildren,
       ...(isRoot && Object.keys(packStates).length > 0 ? { packStates } : {}),
+      executorConfig,
     };
   }
 
@@ -485,6 +517,7 @@ export class StandardExecutor implements Executor {
    * @returns Complete system prompt string
    */
   protected buildSystemPrompt<S>(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     charter: Charter,
     node: Node<S>,
     state: S,

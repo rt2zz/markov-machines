@@ -4,6 +4,8 @@ import type { Node, NodeConfig } from "../types/node.js";
 /**
  * Create a new node instance.
  * Node has no knowledge of Charter - it only knows about its own state type S.
+ *
+ * @typeParam S - The node's state type.
  */
 export function createNode<S>(config: NodeConfig<S>): Node<S> {
   const {
@@ -13,6 +15,7 @@ export function createNode<S>(config: NodeConfig<S>): Node<S> {
     transitions = {},
     initialState,
     packs,
+    executorConfig,
   } = config;
 
   // Validate tool names match their keys
@@ -32,5 +35,6 @@ export function createNode<S>(config: NodeConfig<S>): Node<S> {
     transitions,
     initialState,
     packs,
+    executorConfig,
   };
 }

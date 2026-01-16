@@ -9,12 +9,18 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "convex": "^1.31.5",
+    "jotai": "^2.16.2",
+    "js-cookie": "^3.0.5",
+    "markov-machines": "workspace:*",
     "next": "16.1.2",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/js-cookie": "^3.0.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -7,3 +7,10 @@ export const sessionIdAtom = atomWithStorage<Id<"sessions"> | null>(
   undefined,
   { getOnInit: true }
 );
+
+export const devModeAtom = atomWithStorage<boolean>(
+  "devMode",
+  true, // default to on
+  undefined,
+  { getOnInit: true }
+);

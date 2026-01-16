@@ -50,10 +50,7 @@ function initializePackStates(charter: Charter): Record<string, unknown> {
  * Validates all states in the instance tree.
  * Initializes pack states on root instance if not present.
  */
-export function createMachine(
-  charter: Charter,
-  config: MachineConfig,
-): Machine {
+export function createMachine(charter: Charter, config: MachineConfig): Machine {
   const { instance, history = [] } = config;
 
   // Initialize pack states on root instance if not present

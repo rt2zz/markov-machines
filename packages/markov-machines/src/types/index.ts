@@ -23,6 +23,8 @@ export type {
   SpawnResult,
   CedeResult,
   SpawnTarget,
+  SpawnOptions,
+  TransitionToOptions,
   TransitionHelpers,
 } from "./transitions.js";
 export {

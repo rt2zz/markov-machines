@@ -6,6 +6,7 @@ import type {
   TransitionResult,
   TransitionHelpers,
   SpawnTarget,
+  SpawnOptions,
   CedeResult,
   SpawnResult,
 } from "../types/transitions.js";
@@ -22,10 +23,11 @@ export function createHelpers(): TransitionHelpers {
     spawn: <T = unknown>(
       nodeOrTargets: Node<T> | SpawnTarget<T>[],
       state?: T,
+      options?: SpawnOptions,
     ): SpawnResult<T> => {
-      const children = Array.isArray(nodeOrTargets)
+      const children: SpawnTarget<T>[] = Array.isArray(nodeOrTargets)
         ? nodeOrTargets
-        : [{ node: nodeOrTargets, state }];
+        : [{ node: nodeOrTargets, state, executorConfig: options?.executorConfig }];
       return {
         type: "spawn",
         children,

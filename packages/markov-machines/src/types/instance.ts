@@ -4,6 +4,7 @@ import type { Node } from "./node.js";
 /**
  * Runtime node instance with state and optional children.
  * Forms a tree structure where nodes can spawn children.
+ * @typeParam S - The node's state type.
  */
 export interface Instance<S = unknown> {
   /** Unique identifier for this instance */
@@ -16,6 +17,9 @@ export interface Instance<S = unknown> {
   child?: Instance | Instance[];
   /** Pack states (only on root instance, shared across all nodes) */
   packStates?: Record<string, unknown>;
+  /** Effective executor config for this instance (override or from node) */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  executorConfig?: Record<string, any>;
 }
 
 /**
@@ -26,6 +30,8 @@ export function createInstance<S>(
   state: S,
   child?: Instance | Instance[],
   packStates?: Record<string, unknown>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  executorConfig?: Record<string, any>,
 ): Instance<S> {
   return {
     id: uuid(),
@@ -33,13 +39,14 @@ export function createInstance<S>(
     state,
     child,
     packStates,
+    executorConfig,
   };
 }
 
 /**
  * Check if a value is an Instance.
  */
-export function isInstance(value: unknown): value is Instance {
+export function isInstance<S = unknown>(value: unknown): value is Instance<S> {
   return (
     typeof value === "object" &&
     value !== null &&
