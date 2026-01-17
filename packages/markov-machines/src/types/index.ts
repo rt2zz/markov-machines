@@ -91,3 +91,15 @@ export type {
   AnyPackToolDefinition,
 } from "./pack.js";
 export { isPack, isPackToolDefinition } from "./pack.js";
+
+// Commands
+export type {
+  CommandContext,
+  CommandDefinition,
+  AnyCommandDefinition,
+  CommandResult,
+  ValueResult,
+  CommandInfo,
+  CommandExecutionResult,
+} from "./commands.js";
+export { isValueResult, commandValue } from "./commands.js";

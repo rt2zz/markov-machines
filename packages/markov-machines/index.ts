@@ -6,6 +6,8 @@ export { createTransition, createHelpers } from "./src/core/transition.js";
 export type { TransitionConfig } from "./src/core/transition.js";
 export { runMachine, runMachineToCompletion } from "./src/core/run.js";
 export { createPack } from "./src/core/pack.js";
+export { getAvailableCommands, runCommand, createCommand } from "./src/core/commands.js";
+export type { CommandConfig } from "./src/core/commands.js";
 
 // Executors
 export { StandardExecutor, createStandardExecutor } from "./src/executor/standard.js";
@@ -75,6 +77,14 @@ export type {
   PackToolDefinition,
   PackToolContext,
   AnyPackToolDefinition,
+  // Commands
+  CommandContext,
+  CommandDefinition,
+  AnyCommandDefinition,
+  CommandResult,
+  ValueResult,
+  CommandInfo,
+  CommandExecutionResult,
 } from "./src/types/index.js";
 
 // Type guards and helpers
@@ -98,6 +108,8 @@ export {
   isPack,
   isPackToolDefinition,
   isAnthropicBuiltinTool,
+  isValueResult,
+  commandValue,
 } from "./src/types/index.js";
 
 // Message helpers

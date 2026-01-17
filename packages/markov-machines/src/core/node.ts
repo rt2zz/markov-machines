@@ -13,6 +13,7 @@ export function createNode<S>(config: NodeConfig<S>): Node<S> {
     tools = {},
     validator,
     transitions = {},
+    commands,
     initialState,
     packs,
     executorConfig,
@@ -27,12 +28,24 @@ export function createNode<S>(config: NodeConfig<S>): Node<S> {
     }
   }
 
+  // Validate command names match their keys
+  if (commands) {
+    for (const [key, command] of Object.entries(commands)) {
+      if (command.name !== key) {
+        throw new Error(
+          `Node command name mismatch: key "${key}" does not match command.name "${command.name}"`,
+        );
+      }
+    }
+  }
+
   return {
     id: uuid(),
     instructions,
     tools,
     validator,
     transitions,
+    commands,
     initialState,
     packs,
     executorConfig,

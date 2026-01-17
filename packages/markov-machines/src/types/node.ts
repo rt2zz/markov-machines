@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { Transition } from "./transitions.js";
 import type { AnyToolDefinition, AnthropicBuiltinTool } from "./tools.js";
+import type { AnyCommandDefinition } from "./commands.js";
 import type { Pack } from "./pack.js";
 
 /**
@@ -19,6 +20,8 @@ export interface NodeConfig<S = unknown> {
   validator: z.ZodType<S>;
   /** Transitions see node state S */
   transitions?: Record<string, Transition<S>>;
+  /** Commands - user-callable methods that bypass LLM inference */
+  commands?: Record<string, AnyCommandDefinition<S>>;
   /** Optional initial state for this node */
   initialState?: S;
   /** Packs this node uses */
@@ -45,6 +48,8 @@ export interface Node<S = unknown> {
   validator: z.ZodType<S>;
   /** Available transitions from this node (see node state S) */
   transitions: Record<string, Transition<S>>;
+  /** Commands - user-callable methods that bypass LLM inference */
+  commands?: Record<string, AnyCommandDefinition<S>>;
   /** Optional initial state for this node */
   initialState?: S;
   /** Packs this node uses */
