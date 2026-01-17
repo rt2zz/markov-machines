@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "convex:truncate:all": "bun run ../../scripts/convex-truncate.ts --all"
   },
   "dependencies": {
     "convex": "^1.31.2",

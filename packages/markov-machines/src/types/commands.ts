@@ -101,6 +101,30 @@ export interface CommandInfo {
 }
 
 /**
+ * Object representing a command invocation.
+ * Can be passed to runMachine to execute a command directly without LLM inference.
+ */
+export interface Command {
+  type: "command";
+  name: string;
+  input: unknown;
+}
+
+/**
+ * Type guard for Command.
+ */
+export function isCommand(value: unknown): value is Command {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "command" &&
+    "name" in value &&
+    typeof value.name === "string"
+  );
+}
+
+/**
  * Result of executing a command.
  */
 export interface CommandExecutionResult<T = unknown> {

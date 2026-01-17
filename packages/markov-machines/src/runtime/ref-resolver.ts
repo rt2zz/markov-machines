@@ -69,10 +69,10 @@ export function resolveTool(
  * @param transitionName - Name of the transition
  * @returns The transition or undefined if not found
  */
-export function resolveTransition<S>(
-  instance: Instance<S>,
+export function resolveTransition(
+  instance: Instance,
   transitionName: string,
-): Transition<S> | undefined {
+): Transition<unknown> | undefined {
   return instance.node.transitions[transitionName];
 }
 

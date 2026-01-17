@@ -2,19 +2,27 @@ import { v4 as uuid } from "uuid";
 import type { Node } from "./node.js";
 
 /**
+ * Helper to extract state type from a Node type.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type NodeState<N> = N extends Node<infer S> ? S : unknown;
+
+/**
  * Runtime node instance with state and optional children.
  * Forms a tree structure where nodes can spawn children.
- * @typeParam S - The node's state type.
+ * @typeParam N - The node type (full Node<S> type for type inference).
  */
-export interface Instance<S = unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface Instance<N extends Node<any> = Node> {
   /** Unique identifier for this instance */
   id: string;
   /** The node definition */
-  node: Node<S>;
+  node: N;
   /** Current state for this node */
-  state: S;
+  state: NodeState<N>;
   /** Optional child instance(s) */
-  child?: Instance | Instance[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  child?: Instance<any> | Instance<any>[];
   /** Pack states (only on root instance, shared across all nodes) */
   packStates?: Record<string, unknown>;
   /** Effective executor config for this instance (override or from node) */
@@ -25,14 +33,16 @@ export interface Instance<S = unknown> {
 /**
  * Create a new instance with auto-generated ID.
  */
-export function createInstance<S>(
-  node: Node<S>,
-  state: S,
-  child?: Instance | Instance[],
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createInstance<N extends Node<any>>(
+  node: N,
+  state: NodeState<N>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  child?: Instance<any> | Instance<any>[],
   packStates?: Record<string, unknown>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   executorConfig?: Record<string, any>,
-): Instance<S> {
+): Instance<N> {
   return {
     id: uuid(),
     node,
@@ -46,7 +56,8 @@ export function createInstance<S>(
 /**
  * Check if a value is an Instance.
  */
-export function isInstance<S = unknown>(value: unknown): value is Instance<S> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function isInstance<N extends Node<any> = Node>(value: unknown): value is Instance<N> {
   return (
     typeof value === "object" &&
     value !== null &&

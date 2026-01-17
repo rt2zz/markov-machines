@@ -77,7 +77,7 @@ export const send = action({
         sessionId,
         turnId,
         stepNumber,
-        stopReason: step.stopReason,
+        yieldReason: step.yieldReason,
         response: step.response,
         done: step.done,
         messages: step.messages,

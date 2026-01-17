@@ -71,13 +71,13 @@ export async function runCommand(
 /**
  * Replace an instance in the tree by ID.
  */
-function replaceInstance<S>(
-  root: Instance<S>,
+function replaceInstance(
+  root: Instance,
   targetId: string,
   replacement: Instance,
-): Instance<S> {
+): Instance {
   if (root.id === targetId) {
-    return replacement as Instance<S>;
+    return replacement;
   }
 
   if (!root.child) {
@@ -103,10 +103,10 @@ function replaceInstance<S>(
  * Remove an instance from the tree by ID.
  * Returns undefined if the root itself is removed.
  */
-function removeActiveInstance<S>(
-  root: Instance<S>,
+function removeActiveInstance(
+  root: Instance,
   targetId: string,
-): Instance<S> | undefined {
+): Instance | undefined {
   if (root.id === targetId) {
     return undefined;
   }

@@ -1,8 +1,17 @@
 import type { Machine } from "../types/machine.js";
 import type { RunOptions, MachineStep } from "../executor/types.js";
 import type { Instance } from "../types/instance.js";
+import type { Command } from "../types/commands.js";
 import { getInstancePath } from "../types/instance.js";
 import { userMessage } from "../types/messages.js";
+import { isCommand } from "../types/commands.js";
+import { runCommand } from "./commands.js";
+
+/**
+ * Input type for runMachine.
+ * Can be a string (user message) or a Command object.
+ */
+export type RunMachineInput = string | Command;
 
 /** Check if packStates has any entries */
 const hasPackStates = (ps?: Record<string, unknown>): boolean =>
@@ -118,15 +127,46 @@ function rebuildTreeAfterCede(
 }
 
 /**
- * Run the machine with user input.
- * Yields MachineStep for each inference call.
+ * Run the machine with user input or command.
+ * Yields MachineStep for each inference call or command execution.
  * Continues until there's a text response or max steps exceeded.
+ *
+ * When input is a Command:
+ * - Execute command via runCommand()
+ * - Yield step with yieldReason "command"
+ * - Return immediately (caller handles any cascade)
  */
 export async function* runMachine(
   machine: Machine,
-  input: string,
+  input: RunMachineInput,
   options?: RunOptions,
 ): AsyncGenerator<MachineStep> {
+  // Handle Command input
+  if (isCommand(input)) {
+    const { machine: updatedMachine, result } = await runCommand(
+      machine,
+      input.name,
+      input.input,
+    );
+
+    // Create a message for history tracking
+    const commandMessage = result.success
+      ? `[Command: ${input.name} executed]`
+      : `[Command: ${input.name} failed - ${result.error}]`;
+
+    yield {
+      instance: updatedMachine.instance,
+      messages: [userMessage(commandMessage)],
+      yieldReason: "command",
+      response: result.success
+        ? (typeof result.value === "string" ? result.value : JSON.stringify(result.value ?? null))
+        : result.error ?? "Command failed",
+      done: true,
+    };
+    return;
+  }
+
+  // String input - normal execution
   let currentInstance = machine.instance;
   let currentInput = input;
 
@@ -168,19 +208,19 @@ export async function* runMachine(
     );
 
     if (options?.debug) {
-      console.log(`[runMachine]   Result stopReason: ${result.stopReason}`);
+      console.log(`[runMachine]   Result yieldReason: ${result.yieldReason}`);
       console.log(`[runMachine]   Result response: "${result.response.slice(0, 100)}${result.response.length > 100 ? '...' : ''}"`);
     }
 
     // Handle cede: rebuild tree without the ceded child
-    if (result.stopReason === "cede") {
+    if (result.yieldReason === "cede") {
       currentInstance = rebuildTreeAfterCede(ancestors, result.packStates);
 
       // Yield cede step (never final - parent needs to respond)
       yield {
         instance: currentInstance,
         messages: result.messages,
-        stopReason: "cede",
+        yieldReason: "cede",
         response: result.response,
         done: false,
         cedePayload: result.cedePayload,
@@ -203,7 +243,7 @@ export async function* runMachine(
     currentInstance = rebuildTree(result.instance, ancestors, result.packStates);
 
     // Handle max_tokens: give LLM one recovery chance
-    if (result.stopReason === "max_tokens" && !tokenRecoveryAttempted) {
+    if (result.yieldReason === "max_tokens" && !tokenRecoveryAttempted) {
       tokenRecoveryAttempted = true;
       if (options?.debug) {
         console.log(`[runMachine] max_tokens hit, attempting recovery...`);
@@ -213,7 +253,7 @@ export async function* runMachine(
       yield {
         instance: currentInstance,
         messages: result.messages,
-        stopReason: result.stopReason,
+        yieldReason: result.yieldReason,
         response: result.response,
         done: false,
       };
@@ -230,13 +270,13 @@ export async function* runMachine(
     // Determine if this is the final step
     // end_turn is always final (LLM chose to stop)
     // max_tokens after recovery is final (we tried our best)
-    const isFinal = result.stopReason === "end_turn" ||
-                    result.stopReason === "max_tokens";
+    const isFinal = result.yieldReason === "end_turn" ||
+                    result.yieldReason === "max_tokens";
 
     yield {
       instance: currentInstance,
       messages: result.messages,
-      stopReason: result.stopReason,
+      yieldReason: result.yieldReason,
       response: result.response,
       done: isFinal,
     };
@@ -260,7 +300,7 @@ export async function* runMachine(
  */
 export async function runMachineToCompletion(
   machine: Machine,
-  input: string,
+  input: RunMachineInput,
   options?: RunOptions,
 ): Promise<MachineStep> {
   let lastStep: MachineStep | null = null;

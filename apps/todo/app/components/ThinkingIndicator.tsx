@@ -30,7 +30,7 @@ export function ThinkingIndicator({ sessionId, startTime }: ThinkingIndicatorPro
                 className="text-xs text-gray-400 dark:text-gray-500"
               >
                 <span className="font-mono">
-                  Step {step.stepNumber}: {step.stopReason}
+                  Step {step.stepNumber}: {step.yieldReason}
                 </span>
                 {step.response && (
                   <span className="ml-1 italic">

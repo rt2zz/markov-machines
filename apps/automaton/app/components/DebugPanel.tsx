@@ -113,7 +113,7 @@ interface StepsTabProps {
   steps: Array<{
     _id: string;
     stepNumber: number;
-    stopReason: string;
+    yieldReason: string;
     response: string;
     done: boolean;
     messages: unknown[];
@@ -146,7 +146,7 @@ function StepsTab({ steps, expandedStep, setExpandedStep }: StepsTabProps) {
               </span>
               <div>
                 <span className="font-medium text-gray-900 dark:text-white">
-                  {step.stopReason}
+                  {step.yieldReason}
                 </span>
                 {step.done && (
                   <span className="ml-2 rounded bg-green-100 px-2 py-0.5 text-xs text-green-800 dark:bg-green-900/30 dark:text-green-400">

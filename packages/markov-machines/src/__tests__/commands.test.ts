@@ -28,7 +28,7 @@ function createMockExecutor(): Executor {
         response: "ok",
         instance,
         messages: [],
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
       };
     },
   };

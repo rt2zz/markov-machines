@@ -24,13 +24,13 @@ import { createInstance } from "../types/instance.js";
  * Execute a command on an instance.
  * Returns the result and the updated instance.
  */
-export async function executeCommand<S>(
-  instance: Instance<S>,
+export async function executeCommand(
+  instance: Instance,
   commandName: string,
   input: unknown,
 ): Promise<{
   result: CommandExecutionResult;
-  instance: Instance<S>;
+  instance: Instance;
   transitionResult?: CommandResult;
 }> {
   const command = instance.node.commands?.[commandName];
@@ -52,15 +52,15 @@ export async function executeCommand<S>(
 
   // Track state updates
   let currentState = instance.state;
-  const updateState = (patch: Partial<S>) => {
+  const updateState = (patch: Partial<unknown>) => {
     currentState = deepMerge(
       currentState as Record<string, unknown>,
       patch as Record<string, unknown>,
-    ) as S;
+    );
   };
 
   // Create context with helpers
-  const ctx: CommandContext<S> = {
+  const ctx: CommandContext<unknown> = {
     state: currentState,
     updateState,
     cede: <P = unknown>(payload?: P): CedeResult<P> => ({
@@ -88,7 +88,7 @@ export async function executeCommand<S>(
 
     // Handle value result - just state update + value return
     if (isValueResult(cmdResult)) {
-      const updatedInstance: Instance<S> = { ...instance, state: currentState };
+      const updatedInstance: Instance = { ...instance, state: currentState };
       return {
         result: { success: true, value: cmdResult.value },
         instance: updatedInstance,
@@ -108,7 +108,7 @@ export async function executeCommand<S>(
       );
       return {
         result: { success: true },
-        instance: newInstance as Instance<S>,
+        instance: newInstance,
         transitionResult: cmdResult,
       };
     }
@@ -124,7 +124,7 @@ export async function executeCommand<S>(
           target.executorConfig,
         ),
       );
-      const updatedInstance: Instance<S> = {
+      const updatedInstance: Instance = {
         ...instance,
         state: currentState,
         child: children.length === 1 ? children[0] : children,

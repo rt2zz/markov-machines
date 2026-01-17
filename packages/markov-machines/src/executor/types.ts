@@ -27,9 +27,9 @@ export interface RunResult {
   instance: Instance;
   /** New messages from this turn */
   messages: Message[];
-  /** Why the run stopped */
-  stopReason: "end_turn" | "tool_use" | "max_tokens" | "cede";
-  /** Payload from cede (only set when stopReason is "cede") */
+  /** Why the run yielded */
+  yieldReason: "end_turn" | "tool_use" | "max_tokens" | "cede";
+  /** Payload from cede (only set when yieldReason is "cede") */
   cedePayload?: unknown;
   /** Updated pack states (to be applied to root instance) */
   packStates?: Record<string, unknown>;
@@ -37,20 +37,20 @@ export interface RunResult {
 
 /**
  * A single step in machine execution.
- * Each step represents exactly one Claude API call.
+ * Each step represents exactly one Claude API call or command execution.
  */
 export interface MachineStep {
   /** Updated instance tree after this step */
   instance: Instance;
   /** Messages generated in this step */
   messages: Message[];
-  /** Why this step ended */
-  stopReason: "end_turn" | "tool_use" | "cede" | "max_tokens";
+  /** Why this step yielded */
+  yieldReason: "end_turn" | "tool_use" | "cede" | "max_tokens" | "command";
   /** Text response if any (may be partial/status) */
   response: string;
   /** True if this is the final step (has response or hit limit) */
   done: boolean;
-  /** Cede payload if stopReason is "cede" */
+  /** Cede payload if yieldReason is "cede" */
   cedePayload?: unknown;
 }
 

@@ -31,7 +31,7 @@ export default defineSchema({
     sessionId: v.id("sessions"),
     turnId: v.id("machineTurns"), // Which turn this step belongs to
     stepNumber: v.number(), // 1, 2, 3... within the turn
-    stopReason: v.string(), // "end_turn" | "tool_use" | "cede" | "max_tokens"
+    yieldReason: v.string(), // "end_turn" | "tool_use" | "cede" | "max_tokens" | "command"
     response: v.string(), // Text response (may be empty)
     done: v.boolean(), // Was this the final step?
     messages: v.array(v.any()), // Messages from this step

@@ -24,7 +24,7 @@ export default defineSchema({
     sessionId: v.id("sessions"),
     turnId: v.id("machineTurns"),
     stepNumber: v.number(),
-    stopReason: v.string(),
+    yieldReason: v.string(),
     response: v.string(),
     done: v.boolean(),
     messages: v.array(v.any()),

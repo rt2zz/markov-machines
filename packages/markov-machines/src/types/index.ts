@@ -46,7 +46,7 @@ export type { Node, NodeConfig, NodeToolEntry } from "./node.js";
 export { isNode } from "./node.js";
 
 // Instance
-export type { Instance } from "./instance.js";
+export type { Instance, NodeState } from "./instance.js";
 export {
   createInstance,
   isInstance,
@@ -101,5 +101,16 @@ export type {
   ValueResult,
   CommandInfo,
   CommandExecutionResult,
+  Command,
 } from "./commands.js";
-export { isValueResult, commandValue } from "./commands.js";
+export { isValueResult, commandValue, isCommand } from "./commands.js";
+
+// Client
+export type {
+  CommandMeta,
+  NodeCommands,
+  DryClientNode,
+  ClientNode,
+  DryClientInstance,
+  ClientInstance,
+} from "./client.js";

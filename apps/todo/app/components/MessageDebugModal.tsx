@@ -68,7 +68,7 @@ export function MessageDebugModal({ turnId, onClose }: MessageDebugModalProps) {
               >
                 <div className="mb-2 flex items-center justify-between">
                   <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
-                    Step {step.stepNumber}: {step.stopReason}
+                    Step {step.stepNumber}: {step.yieldReason}
                   </span>
                   {step.done && (
                     <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-800 dark:bg-green-900/30 dark:text-green-400">

@@ -5,9 +5,18 @@ export { createMachine } from "./src/core/machine.js";
 export { createTransition, createHelpers } from "./src/core/transition.js";
 export type { TransitionConfig } from "./src/core/transition.js";
 export { runMachine, runMachineToCompletion } from "./src/core/run.js";
+export type { RunMachineInput } from "./src/core/run.js";
 export { createPack } from "./src/core/pack.js";
 export { getAvailableCommands, runCommand, createCommand } from "./src/core/commands.js";
 export type { CommandConfig } from "./src/core/commands.js";
+
+// Client
+export {
+  createDryClientNode,
+  createDryClientInstance,
+  hydrateClientNode,
+  hydrateClientInstance,
+} from "./src/core/client.js";
 
 // Executors
 export { StandardExecutor, createStandardExecutor } from "./src/executor/standard.js";
@@ -35,6 +44,7 @@ export type {
   NodeToolEntry,
   // Instance
   Instance,
+  NodeState,
   // Machine
   Machine,
   MachineConfig,
@@ -85,6 +95,14 @@ export type {
   ValueResult,
   CommandInfo,
   CommandExecutionResult,
+  Command,
+  // Client
+  CommandMeta,
+  NodeCommands,
+  DryClientNode,
+  ClientNode,
+  DryClientInstance,
+  ClientInstance,
 } from "./src/types/index.js";
 
 // Type guards and helpers
@@ -110,6 +128,7 @@ export {
   isAnthropicBuiltinTool,
   isValueResult,
   commandValue,
+  isCommand,
 } from "./src/types/index.js";
 
 // Message helpers

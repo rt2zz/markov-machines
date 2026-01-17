@@ -187,12 +187,12 @@ export class StandardExecutor implements Executor {
     const assistantMsg = assistantMessage(assistantContent);
     newMessages.push(assistantMsg);
 
-    // Determine stop reason and process accordingly
-    let stopReason: "end_turn" | "tool_use" | "max_tokens" | "cede" = "end_turn";
+    // Determine yield reason and process accordingly
+    let yieldReason: "end_turn" | "tool_use" | "max_tokens" | "cede" = "end_turn";
     let cedePayload: unknown = undefined;
 
     if (response.stop_reason === "max_tokens") {
-      stopReason = "max_tokens";
+      yieldReason = "max_tokens";
     } else if (response.stop_reason === "tool_use") {
       // Process tool calls synchronously
       const toolResults: ToolResultBlock[] = [];
@@ -400,8 +400,8 @@ export class StandardExecutor implements Executor {
 
         // Handle discriminated union
         if (isCedeResult(result)) {
-          // Cede: return with cede stop reason
-          stopReason = "cede";
+          // Cede: return with cede yield reason
+          yieldReason = "cede";
           cedePayload = result.payload;
         } else if (isSpawnResult(result)) {
           // Spawn: add children to current instance
@@ -425,7 +425,7 @@ export class StandardExecutor implements Executor {
               newChildren.length === 1 ? newChildren[0] : newChildren;
           }
           // Return with tool_use - more work to do
-          stopReason = "tool_use";
+          yieldReason = "tool_use";
         } else if (isTransitionToResult(result)) {
           // Normal transition
           currentNode = result.node as Node<unknown>;
@@ -445,14 +445,14 @@ export class StandardExecutor implements Executor {
           // Clear children on transition to new node
           currentChildren = undefined;
           // Return with tool_use - more work to do on new node
-          stopReason = "tool_use";
+          yieldReason = "tool_use";
         }
       } else {
         // Tools were called but no transition - return tool_use
-        stopReason = "tool_use";
+        yieldReason = "tool_use";
       }
     }
-    // else: end_turn - stopReason already set to "end_turn"
+    // else: end_turn - yieldReason already set to "end_turn"
 
     // Extract text response
     const textResponse = getMessageText(assistantMsg);
@@ -472,7 +472,7 @@ export class StandardExecutor implements Executor {
       response: textResponse,
       instance: updatedInstance,
       messages: newMessages,
-      stopReason,
+      yieldReason,
       cedePayload,
       packStates: Object.keys(packStates).length > 0 ? packStates : undefined,
     };

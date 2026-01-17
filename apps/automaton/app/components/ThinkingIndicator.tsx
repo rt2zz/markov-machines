@@ -40,13 +40,13 @@ export function ThinkingIndicator({ sessionId, startTime }: ThinkingIndicatorPro
                 key={step._id}
                 className="flex items-start gap-2 text-xs"
               >
-                <StepIcon stopReason={step.stopReason} />
+                <StepIcon yieldReason={step.yieldReason} />
                 <div className="flex-1">
                   <span className="font-medium text-gray-600 dark:text-gray-400">
                     Step {step.stepNumber}
                   </span>
                   <span className="ml-1 text-gray-400 dark:text-gray-500">
-                    {formatStopReason(step.stopReason)}
+                    {formatYieldReason(step.yieldReason)}
                   </span>
                   {step.response && (
                     <p className="mt-0.5 text-gray-500 dark:text-gray-400 line-clamp-2">
@@ -64,10 +64,10 @@ export function ThinkingIndicator({ sessionId, startTime }: ThinkingIndicatorPro
   );
 }
 
-function StepIcon({ stopReason }: { stopReason: string }) {
+function StepIcon({ yieldReason }: { yieldReason: string }) {
   const className = "h-4 w-4 flex-shrink-0";
 
-  switch (stopReason) {
+  switch (yieldReason) {
     case "tool_use":
       return (
         <svg className={`${className} text-purple-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -96,7 +96,7 @@ function StepIcon({ stopReason }: { stopReason: string }) {
   }
 }
 
-function formatStopReason(reason: string): string {
+function formatYieldReason(reason: string): string {
   switch (reason) {
     case "tool_use":
       return "using tool";

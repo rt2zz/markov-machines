@@ -49,7 +49,7 @@ function createMockExecutor(
         response: result.response ?? "ok",
         instance: result.instance ?? instance,
         messages: result.messages ?? [],
-        stopReason: result.stopReason ?? "end_turn",
+        yieldReason: result.yieldReason ?? "end_turn",
         cedePayload: result.cedePayload,
         packStates: result.packStates,
       };
@@ -103,7 +103,7 @@ describe("spawn behavior", () => {
           ...instance,
           child: newChild,
         },
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
       };
     });
 
@@ -151,10 +151,10 @@ describe("spawn behavior", () => {
         const newChild = createInstance(childNode, { query: "spawned", result: undefined });
         return {
           instance: { ...instance, child: newChild },
-          stopReason: "end_turn",
+          yieldReason: "end_turn",
         };
       }
-      return { instance, stopReason: "end_turn" };
+      return { instance, yieldReason: "end_turn" };
     });
 
     const charter = createCharter({
@@ -203,7 +203,7 @@ describe("spawn continuation", () => {
         const newChild = createInstance(childNode, { query: "research", result: undefined });
         return {
           instance: { ...instance, child: newChild },
-          stopReason: "tool_use", // Spawn returns tool_use to continue on child
+          yieldReason: "tool_use", // Spawn returns tool_use to continue on child
           response: "",
           messages: [],
         };
@@ -212,7 +212,7 @@ describe("spawn continuation", () => {
       // Second call: child responds
       return {
         instance,
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
         response: "Hello, I'm the child starting my work!",
         messages: [],
       };
@@ -237,7 +237,7 @@ describe("spawn continuation", () => {
 
     // Response should be from child
     expect(result.response).toBe("Hello, I'm the child starting my work!");
-    expect(result.stopReason).toBe("end_turn");
+    expect(result.yieldReason).toBe("end_turn");
   });
 
   it("should stop if spawn has a text response", async () => {
@@ -260,7 +260,7 @@ describe("spawn continuation", () => {
       const newChild = createInstance(childNode, { query: "research", result: undefined });
       return {
         instance: { ...instance, child: newChild },
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
         response: "I've started the researcher for you!", // Has response
         messages: [],
       };
@@ -304,7 +304,7 @@ describe("spawn continuation", () => {
         const newChild = createInstance(childNode, { query: "quick", result: undefined });
         return {
           instance: { ...instance, child: newChild },
-          stopReason: "tool_use",
+          yieldReason: "tool_use",
           response: "",
           messages: [],
         };
@@ -314,7 +314,7 @@ describe("spawn continuation", () => {
         // Child immediately cedes (no response)
         return {
           instance,
-          stopReason: "cede",
+          yieldReason: "cede",
           cedePayload: { done: true },
           response: "",
           messages: [],
@@ -324,7 +324,7 @@ describe("spawn continuation", () => {
       // Parent responds after receiving cede
       return {
         instance,
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
         response: "The quick task is done!",
         messages: [],
       };
@@ -374,7 +374,7 @@ describe("cede behavior", () => {
         // Child cedes
         return {
           instance,
-          stopReason: "cede",
+          yieldReason: "cede",
           cedePayload: { result: "done" },
           response: "",
         };
@@ -382,7 +382,7 @@ describe("cede behavior", () => {
       // Parent responds
       return {
         instance,
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
         response: "Got the cede result!",
       };
     });
@@ -407,12 +407,12 @@ describe("cede behavior", () => {
     expect(steps.length).toBe(2);
 
     // First step: cede
-    expect(steps[0]?.stopReason).toBe("cede");
+    expect(steps[0]?.yieldReason).toBe("cede");
     expect(steps[0]?.cedePayload).toEqual({ result: "done" });
     expect(steps[0]?.instance.child).toBeUndefined(); // Child removed after cede
 
     // Second step: parent responds
-    expect(steps[1]?.stopReason).toBe("end_turn");
+    expect(steps[1]?.yieldReason).toBe("end_turn");
     expect(steps[1]?.response).toBe("Got the cede result!");
 
     // Parent should be the active instance
@@ -439,14 +439,14 @@ describe("cede behavior", () => {
       if (callCount === 1) {
         return {
           instance,
-          stopReason: "cede",
+          yieldReason: "cede",
           cedePayload: { findings: ["item1", "item2"], query: "test" },
           response: "",
         };
       }
       return {
         instance,
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
         response: "Done!",
       };
     });
@@ -489,7 +489,7 @@ describe("cede behavior", () => {
         const newChild = createInstance(childNode, { query: "research", result: undefined });
         return {
           instance: { ...instance, child: newChild },
-          stopReason: "end_turn",
+          yieldReason: "end_turn",
         };
       }
 
@@ -497,7 +497,7 @@ describe("cede behavior", () => {
         // Step 2: Child does work (runs on child since it's active)
         return {
           instance: { ...instance, state: { query: "research", result: "found stuff" } },
-          stopReason: "end_turn",
+          yieldReason: "end_turn",
         };
       }
 
@@ -505,7 +505,7 @@ describe("cede behavior", () => {
         // Step 3: Child cedes back with results (no response)
         return {
           instance,
-          stopReason: "cede",
+          yieldReason: "cede",
           cedePayload: { result: "found stuff" },
           response: "",
         };
@@ -514,7 +514,7 @@ describe("cede behavior", () => {
       // Step 4: Parent responds after receiving cede
       return {
         instance,
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
         response: "Research complete!",
       };
     });
@@ -554,13 +554,13 @@ describe("cede behavior", () => {
     expect(steps3.length).toBe(2);
 
     // First step: cede with payload
-    expect(steps3[0]?.stopReason).toBe("cede");
+    expect(steps3[0]?.yieldReason).toBe("cede");
     expect(steps3[0]?.cedePayload).toEqual({ result: "found stuff" });
     expect(steps3[0]?.instance.child).toBeUndefined(); // Child removed
 
     // Final step: parent responds
     const result3 = steps3[1]!;
-    expect(result3.stopReason).toBe("end_turn");
+    expect(result3.yieldReason).toBe("end_turn");
     expect(result3.response).toBe("Research complete!");
     expect(getActiveInstance(result3.instance).node.id).toBe(parentNode.id);
   });
@@ -588,7 +588,7 @@ describe("cede continuation", () => {
         // First call: child cedes with no text response
         return {
           instance,
-          stopReason: "cede",
+          yieldReason: "cede",
           cedePayload: { result: "findings" },
           response: "", // No text response
           messages: [],
@@ -598,7 +598,7 @@ describe("cede continuation", () => {
       // Second call: parent responds (after receiving cede payload)
       return {
         instance,
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
         response: "Here are the results from the child!",
         messages: [],
       };
@@ -625,7 +625,7 @@ describe("cede continuation", () => {
 
     // Should have a text response from parent
     expect(result.response).toBe("Here are the results from the child!");
-    expect(result.stopReason).toBe("end_turn");
+    expect(result.yieldReason).toBe("end_turn");
   });
 
   it("should include text response in cede step", async () => {
@@ -648,7 +648,7 @@ describe("cede continuation", () => {
         // Child cedes WITH a text response
         return {
           instance,
-          stopReason: "cede",
+          yieldReason: "cede",
           cedePayload: { result: "findings" },
           response: "I'm done with my research!",
           messages: [],
@@ -657,7 +657,7 @@ describe("cede continuation", () => {
       // Parent responds
       return {
         instance,
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
         response: "Thanks for the results!",
       };
     });
@@ -678,7 +678,7 @@ describe("cede continuation", () => {
     expect(steps.length).toBe(2);
 
     // Cede step includes the text response
-    expect(steps[0]?.stopReason).toBe("cede");
+    expect(steps[0]?.yieldReason).toBe("cede");
     expect(steps[0]?.response).toBe("I'm done with my research!");
     expect(steps[0]?.cedePayload).toEqual({ result: "findings" });
     expect(steps[0]?.done).toBe(false); // Cede always continues
@@ -715,7 +715,7 @@ describe("cede continuation", () => {
     const executor = createMockExecutor((_charter, instance, _ancestors, _input) => {
       return {
         instance,
-        stopReason: "cede",
+        yieldReason: "cede",
         cedePayload: {},
         response: "",
         messages: [],
@@ -765,7 +765,7 @@ describe("cede continuation", () => {
       if (callCount === 1) {
         return {
           instance,
-          stopReason: "cede",
+          yieldReason: "cede",
           cedePayload: { findings: ["item1", "item2"] },
           response: "",
           messages: [{ role: "assistant" as const, content: "Calling cede..." }],
@@ -774,7 +774,7 @@ describe("cede continuation", () => {
 
       return {
         instance,
-        stopReason: "end_turn",
+        yieldReason: "end_turn",
         response: "Got the results!",
         messages: [{ role: "assistant" as const, content: "Got the results!" }],
       };
@@ -796,13 +796,13 @@ describe("cede continuation", () => {
     expect(steps.length).toBe(2);
 
     // First step: cede with payload
-    expect(steps[0]?.stopReason).toBe("cede");
+    expect(steps[0]?.yieldReason).toBe("cede");
     expect(steps[0]?.cedePayload).toEqual({ findings: ["item1", "item2"] });
     expect(steps[0]?.messages).toEqual([{ role: "assistant", content: "Calling cede..." }]);
     expect(steps[0]?.done).toBe(false);
 
     // Second step: parent responds
-    expect(steps[1]?.stopReason).toBe("end_turn");
+    expect(steps[1]?.yieldReason).toBe("end_turn");
     expect(steps[1]?.response).toBe("Got the results!");
     expect(steps[1]?.messages).toEqual([{ role: "assistant", content: "Got the results!" }]);
     expect(steps[1]?.done).toBe(true);
