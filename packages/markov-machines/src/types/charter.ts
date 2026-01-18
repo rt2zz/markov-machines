@@ -7,21 +7,24 @@ import type { Pack } from "./pack.js";
 /**
  * Charter configuration for createCharter.
  * Charter is purely static - a registry for serialization and ref resolution.
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export interface CharterConfig {
+export interface CharterConfig<AppMessage = unknown> {
   name: string;
   /** Single executor for running nodes */
-  executor: Executor;
+  executor: Executor<AppMessage>;
   /** Registered tools (for ref-based lookup, available to all nodes) */
   tools?: Record<string, AnyToolDefinition>;
   /** Registered transitions (for ref-based lookup) */
   // Registry holds items with heterogeneous state types, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transitions?: Record<string, Transition<any>>;
-  /** Registered nodes (for ref-based lookup) */
-  // Registry holds items with heterogeneous state types, requiring `any`
+  /**
+   * Registered nodes (for ref-based lookup).
+   * Nodes must output AppMessage or have no output.
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nodes?: Record<string, Node<any>>;
+  nodes?: Record<string, Node<any, AppMessage> | Node<any, never>>;
   /** Registered packs (reusable modules with state and tools) */
   // Registry holds items with heterogeneous state types, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,21 +34,24 @@ export interface CharterConfig {
 /**
  * Charter instance - static registry with single executor, tools, transitions, and nodes.
  * Charter has no state - state lives in NodeInstances.
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export interface Charter {
+export interface Charter<AppMessage = unknown> {
   name: string;
   /** Single executor for running nodes */
-  executor: Executor;
+  executor: Executor<AppMessage>;
   /** Registered tools (available to all nodes via ref resolution) */
   tools: Record<string, AnyToolDefinition>;
   /** Registered transitions */
   // Registry holds items with heterogeneous state types, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transitions: Record<string, Transition<any>>;
-  /** Registered nodes */
-  // Registry holds items with heterogeneous state types, requiring `any`
+  /**
+   * Registered nodes.
+   * Nodes must output AppMessage or have no output.
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nodes: Record<string, Node<any>>;
+  nodes: Record<string, Node<any, AppMessage> | Node<any, never>>;
   /** Registered packs */
   // Registry holds items with heterogeneous state types, requiring `any`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

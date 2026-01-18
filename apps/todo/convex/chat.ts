@@ -10,6 +10,7 @@ import {
   serializeInstance,
   deserializeInstance,
   createInstance,
+  getMessageText,
   type Instance,
   type Node,
   type Message,
@@ -21,6 +22,18 @@ import { todoCharter, mainNode, createInitialState } from "../src/agent/charter"
 function getActiveNodeInstructions(instance: Instance): string {
   const instructions = instance.node.instructions || "";
   return instructions.slice(0, 100);
+}
+
+// Helper to extract response text from step messages
+function getStepResponse(step: MachineStep<unknown>): string {
+  // Find the last assistant message and extract its text
+  for (let i = step.messages.length - 1; i >= 0; i--) {
+    const msg = step.messages[i];
+    if (msg && msg.role === "assistant") {
+      return getMessageText(msg);
+    }
+  }
+  return "";
 }
 
 export const send = action({
@@ -78,7 +91,7 @@ export const send = action({
         turnId,
         stepNumber,
         yieldReason: step.yieldReason,
-        response: step.response,
+        response: getStepResponse(step),
         done: step.done,
         messages: step.messages,
         instance: serializeInstance(step.instance, todoCharter),
@@ -107,14 +120,15 @@ export const send = action({
     }
 
     // Add assistant message to UI (linked to turn for debugging)
+    const responseText = getStepResponse(lastStep);
     await ctx.runMutation(api.messages.add, {
       sessionId,
       role: "assistant",
-      content: lastStep.response,
+      content: responseText,
       turnId,
     });
 
-    return lastStep.response;
+    return responseText;
   },
 });
 

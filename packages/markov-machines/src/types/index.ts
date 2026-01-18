@@ -42,7 +42,7 @@ export type { StateUpdateResult } from "./state.js";
 export { deepMerge } from "./state.js";
 
 // Node
-export type { Node, NodeConfig, NodeToolEntry } from "./node.js";
+export type { Node, NodeConfig, NodeToolEntry, OutputConfig } from "./node.js";
 export { isNode } from "./node.js";
 
 // Instance
@@ -66,12 +66,14 @@ export type {
   ToolUseBlock,
   ToolResultBlock,
   ThinkingBlock,
+  OutputBlock,
 } from "./messages.js";
 export {
   userMessage,
   assistantMessage,
   toolResult,
   getMessageText,
+  isOutputBlock,
 } from "./messages.js";
 
 // Machine

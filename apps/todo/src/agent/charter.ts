@@ -104,7 +104,7 @@ Be concise and helpful.`,
 });
 
 // Create archive node
-const archiveNode = createNode<ArchiveState>({
+const archiveNode = createNode({
   instructions: `You are viewing the archive of completed todos.
 
 Available actions:

@@ -62,7 +62,8 @@ export async function executeTransition<S>(
       if (!node) {
         throw new Error(`Unknown node ref: ${resolved.node.ref}`);
       }
-      return transitionTo(node);
+      // Cast needed because charter.nodes contains nodes with any output type
+      return transitionTo(node as Node<unknown, never>);
     }
     return transitionTo(deserializeNode(charter, resolved.node));
   }

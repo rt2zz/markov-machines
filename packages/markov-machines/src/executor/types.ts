@@ -4,11 +4,12 @@ import type { Message } from "../types/messages.js";
 
 /**
  * Options for executor run.
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export interface RunOptions {
+export interface RunOptions<AppMessage = unknown> {
   maxTurns?: number;
   /** Previous conversation history to include */
-  history?: Message[];
+  history?: Message<AppMessage>[];
   /** Max execution steps (for cede continuation). Default 50. */
   maxSteps?: number;
   /** Current step number (1-indexed) */
@@ -19,14 +20,13 @@ export interface RunOptions {
 
 /**
  * Result returned from executor run (single API call).
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export interface RunResult {
-  /** Text response from the agent */
-  response: string;
+export interface RunResult<AppMessage = unknown> {
   /** Updated instance tree */
   instance: Instance;
   /** New messages from this turn */
-  messages: Message[];
+  messages: Message<AppMessage>[];
   /** Why the run yielded */
   yieldReason: "end_turn" | "tool_use" | "max_tokens" | "cede";
   /** Payload from cede (only set when yieldReason is "cede") */
@@ -38,16 +38,15 @@ export interface RunResult {
 /**
  * A single step in machine execution.
  * Each step represents exactly one Claude API call or command execution.
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export interface MachineStep {
+export interface MachineStep<AppMessage = unknown> {
   /** Updated instance tree after this step */
   instance: Instance;
   /** Messages generated in this step */
-  messages: Message[];
+  messages: Message<AppMessage>[];
   /** Why this step yielded */
   yieldReason: "end_turn" | "tool_use" | "cede" | "max_tokens" | "command";
-  /** Text response if any (may be partial/status) */
-  response: string;
   /** True if this is the final step (has response or hit limit) */
   done: boolean;
   /** Cede payload if yieldReason is "cede" */
@@ -57,8 +56,9 @@ export interface MachineStep {
 /**
  * Executor interface for running the agent loop.
  * Charter has a single executor that runs all nodes.
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export interface Executor {
+export interface Executor<AppMessage = unknown> {
   /** Executor type identifier */
   type: "standard";
 
@@ -71,12 +71,12 @@ export interface Executor {
    * @param options - Run options
    */
   run(
-    charter: Charter,
+    charter: Charter<AppMessage>,
     instance: Instance,
     ancestors: Instance[],
     input: string,
-    options?: RunOptions,
-  ): Promise<RunResult>;
+    options?: RunOptions<AppMessage>,
+  ): Promise<RunResult<AppMessage>>;
 }
 
 /**

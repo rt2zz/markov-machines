@@ -10,10 +10,25 @@ import type { Pack } from "./pack.js";
 export type NodeToolEntry<S = unknown> = AnyToolDefinition<S> | AnthropicBuiltinTool;
 
 /**
+ * Output configuration for structured LLM responses.
+ * @typeParam M - The application message type this output maps to.
+ */
+export interface OutputConfig<M> {
+  /** Zod schema for structured output constraint (sent to LLM API) */
+  schema: z.ZodType;
+  /**
+   * Map the raw text response to application message format.
+   * App is responsible for JSON.parse() if needed.
+   */
+  mapTextBlock: (text: string) => M;
+}
+
+/**
  * Node configuration for createNode.
  * @typeParam S - The node's state type.
+ * @typeParam M - The output message type (never = no structured output).
  */
-export interface NodeConfig<S = unknown> {
+export interface NodeConfig<S = unknown, M = never> {
   instructions: string;
   /** Node tools (state access via context) */
   tools?: Record<string, NodeToolEntry<S>>;
@@ -31,13 +46,16 @@ export interface NodeConfig<S = unknown> {
   /** Per-node executor configuration (overrides executor defaults) */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   executorConfig?: Record<string, any>;
+  /** Structured output configuration */
+  output?: OutputConfig<M>;
 }
 
 /**
  * Runtime node instance.
  * @typeParam S - The node's state type. Node has no knowledge of Charter.
+ * @typeParam M - The output message type (never = no structured output).
  */
-export interface Node<S = unknown> {
+export interface Node<S = unknown, M = never> {
   /** Unique identifier for this node instance */
   id: string;
   /** Instructions for the agent in this node */
@@ -59,12 +77,14 @@ export interface Node<S = unknown> {
   /** Per-node executor configuration (overrides executor defaults) */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   executorConfig?: Record<string, any>;
+  /** Structured output configuration */
+  output?: OutputConfig<M>;
 }
 
 /**
  * Check if a value is a Node instance.
  */
-export function isNode<S>(value: unknown): value is Node<S> {
+export function isNode<S, M = never>(value: unknown): value is Node<S, M> {
   return (
     typeof value === "object" &&
     value !== null &&

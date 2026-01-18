@@ -5,25 +5,27 @@ import type { Ref, SerialNode } from "./refs.js";
 
 /**
  * Machine configuration for createMachine.
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export interface MachineConfig {
+export interface MachineConfig<AppMessage = unknown> {
   /** Root node instance (may have nested children) */
   instance: Instance;
   /** Conversation history */
-  history?: Message[];
+  history?: Message<AppMessage>[];
 }
 
 /**
  * Machine instance - the runtime context for running the agent.
  * Contains the charter and the node instance tree.
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export interface Machine {
+export interface Machine<AppMessage = unknown> {
   /** Reference to the charter (static registry) */
-  charter: Charter;
+  charter: Charter<AppMessage>;
   /** Root node instance (may have nested children) */
   instance: Instance;
   /** Conversation history */
-  history: Message[];
+  history: Message<AppMessage>[];
 }
 
 /**
@@ -44,10 +46,11 @@ export interface SerializedInstance {
 
 /**
  * Serialized machine for persistence.
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export interface SerializedMachine {
+export interface SerializedMachine<AppMessage = unknown> {
   /** Root instance tree */
   instance: SerializedInstance;
   /** Full conversation history */
-  history: Message[];
+  history: Message<AppMessage>[];
 }

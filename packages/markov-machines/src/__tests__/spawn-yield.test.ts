@@ -29,24 +29,23 @@ async function collectSteps(
  */
 function createMockExecutor(
   behavior: (
-    charter: Charter,
+    charter: Charter<unknown>,
     instance: Instance,
     ancestors: Instance[],
     input: string,
-  ) => Partial<RunResult>,
-): Executor {
+  ) => Partial<RunResult<unknown>>,
+): Executor<unknown> {
   return {
     type: "standard",
     run: async (
-      charter: Charter,
+      charter: Charter<unknown>,
       instance: Instance,
       ancestors: Instance[],
       input: string,
-      _options?: RunOptions,
-    ): Promise<RunResult> => {
+      _options?: RunOptions<unknown>,
+    ): Promise<RunResult<unknown>> => {
       const result = behavior(charter, instance, ancestors, input);
       return {
-        response: result.response ?? "ok",
         instance: result.instance ?? instance,
         messages: result.messages ?? [],
         yieldReason: result.yieldReason ?? "end_turn",
@@ -204,7 +203,6 @@ describe("spawn continuation", () => {
         return {
           instance: { ...instance, child: newChild },
           yieldReason: "tool_use", // Spawn returns tool_use to continue on child
-          response: "",
           messages: [],
         };
       }
@@ -213,8 +211,7 @@ describe("spawn continuation", () => {
       return {
         instance,
         yieldReason: "end_turn",
-        response: "Hello, I'm the child starting my work!",
-        messages: [],
+        messages: [{ role: "assistant" as const, content: "Hello, I'm the child starting my work!" }],
       };
     });
 
@@ -235,8 +232,7 @@ describe("spawn continuation", () => {
     // Child should exist
     expect(result.instance.child).toBeDefined();
 
-    // Response should be from child
-    expect(result.response).toBe("Hello, I'm the child starting my work!");
+    // Check yield reason
     expect(result.yieldReason).toBe("end_turn");
   });
 
@@ -261,8 +257,7 @@ describe("spawn continuation", () => {
       return {
         instance: { ...instance, child: newChild },
         yieldReason: "end_turn",
-        response: "I've started the researcher for you!", // Has response
-        messages: [],
+        messages: [{ role: "assistant" as const, content: "I've started the researcher for you!" }],
       };
     });
 
@@ -279,7 +274,7 @@ describe("spawn continuation", () => {
 
     // Should only call executor once (spawn had response)
     expect(callCount).toBe(1);
-    expect(result.response).toBe("I've started the researcher for you!");
+    expect(result.yieldReason).toBe("end_turn");
   });
 
   it("should handle spawn followed by cede in same run", async () => {
@@ -305,7 +300,6 @@ describe("spawn continuation", () => {
         return {
           instance: { ...instance, child: newChild },
           yieldReason: "tool_use",
-          response: "",
           messages: [],
         };
       }
@@ -316,7 +310,6 @@ describe("spawn continuation", () => {
           instance,
           yieldReason: "cede",
           cedePayload: { done: true },
-          response: "",
           messages: [],
         };
       }
@@ -325,8 +318,7 @@ describe("spawn continuation", () => {
       return {
         instance,
         yieldReason: "end_turn",
-        response: "The quick task is done!",
-        messages: [],
+        messages: [{ role: "assistant" as const, content: "The quick task is done!" }],
       };
     });
 
@@ -347,8 +339,8 @@ describe("spawn continuation", () => {
     // Child should be removed after cede
     expect(result.instance.child).toBeUndefined();
 
-    // Response should be from parent
-    expect(result.response).toBe("The quick task is done!");
+    // Verify yield reason
+    expect(result.yieldReason).toBe("end_turn");
   });
 });
 
@@ -376,14 +368,14 @@ describe("cede behavior", () => {
           instance,
           yieldReason: "cede",
           cedePayload: { result: "done" },
-          response: "",
+          messages: [],
         };
       }
       // Parent responds
       return {
         instance,
         yieldReason: "end_turn",
-        response: "Got the cede result!",
+        messages: [{ role: "assistant" as const, content: "Got the cede result!" }],
       };
     });
 
@@ -413,7 +405,6 @@ describe("cede behavior", () => {
 
     // Second step: parent responds
     expect(steps[1]?.yieldReason).toBe("end_turn");
-    expect(steps[1]?.response).toBe("Got the cede result!");
 
     // Parent should be the active instance
     const active = getActiveInstance(steps[1]!.instance);
@@ -441,13 +432,13 @@ describe("cede behavior", () => {
           instance,
           yieldReason: "cede",
           cedePayload: { findings: ["item1", "item2"], query: "test" },
-          response: "",
+          messages: [],
         };
       }
       return {
         instance,
         yieldReason: "end_turn",
-        response: "Done!",
+        messages: [{ role: "assistant" as const, content: "Done!" }],
       };
     });
 
@@ -507,7 +498,7 @@ describe("cede behavior", () => {
           instance,
           yieldReason: "cede",
           cedePayload: { result: "found stuff" },
-          response: "",
+          messages: [],
         };
       }
 
@@ -515,7 +506,7 @@ describe("cede behavior", () => {
       return {
         instance,
         yieldReason: "end_turn",
-        response: "Research complete!",
+        messages: [{ role: "assistant" as const, content: "Research complete!" }],
       };
     });
 
@@ -561,7 +552,6 @@ describe("cede behavior", () => {
     // Final step: parent responds
     const result3 = steps3[1]!;
     expect(result3.yieldReason).toBe("end_turn");
-    expect(result3.response).toBe("Research complete!");
     expect(getActiveInstance(result3.instance).node.id).toBe(parentNode.id);
   });
 });
@@ -590,7 +580,6 @@ describe("cede continuation", () => {
           instance,
           yieldReason: "cede",
           cedePayload: { result: "findings" },
-          response: "", // No text response
           messages: [],
         };
       }
@@ -599,8 +588,7 @@ describe("cede continuation", () => {
       return {
         instance,
         yieldReason: "end_turn",
-        response: "Here are the results from the child!",
-        messages: [],
+        messages: [{ role: "assistant" as const, content: "Here are the results from the child!" }],
       };
     });
 
@@ -623,8 +611,7 @@ describe("cede continuation", () => {
     // Child should be removed
     expect(result.instance.child).toBeUndefined();
 
-    // Should have a text response from parent
-    expect(result.response).toBe("Here are the results from the child!");
+    // Verify yield reason
     expect(result.yieldReason).toBe("end_turn");
   });
 
@@ -650,15 +637,14 @@ describe("cede continuation", () => {
           instance,
           yieldReason: "cede",
           cedePayload: { result: "findings" },
-          response: "I'm done with my research!",
-          messages: [],
+          messages: [{ role: "assistant" as const, content: "I'm done with my research!" }],
         };
       }
       // Parent responds
       return {
         instance,
         yieldReason: "end_turn",
-        response: "Thanks for the results!",
+        messages: [{ role: "assistant" as const, content: "Thanks for the results!" }],
       };
     });
 
@@ -679,12 +665,11 @@ describe("cede continuation", () => {
 
     // Cede step includes the text response
     expect(steps[0]?.yieldReason).toBe("cede");
-    expect(steps[0]?.response).toBe("I'm done with my research!");
     expect(steps[0]?.cedePayload).toEqual({ result: "findings" });
     expect(steps[0]?.done).toBe(false); // Cede always continues
 
     // Parent responds
-    expect(steps[1]?.response).toBe("Thanks for the results!");
+    expect(steps[1]?.yieldReason).toBe("end_turn");
   });
 
   it("should throw error if max steps exceeded", async () => {
@@ -717,7 +702,6 @@ describe("cede continuation", () => {
         instance,
         yieldReason: "cede",
         cedePayload: {},
-        response: "",
         messages: [],
       };
     });
@@ -767,7 +751,6 @@ describe("cede continuation", () => {
           instance,
           yieldReason: "cede",
           cedePayload: { findings: ["item1", "item2"] },
-          response: "",
           messages: [{ role: "assistant" as const, content: "Calling cede..." }],
         };
       }
@@ -775,7 +758,6 @@ describe("cede continuation", () => {
       return {
         instance,
         yieldReason: "end_turn",
-        response: "Got the results!",
         messages: [{ role: "assistant" as const, content: "Got the results!" }],
       };
     });
@@ -803,7 +785,6 @@ describe("cede continuation", () => {
 
     // Second step: parent responds
     expect(steps[1]?.yieldReason).toBe("end_turn");
-    expect(steps[1]?.response).toBe("Got the results!");
     expect(steps[1]?.messages).toEqual([{ role: "assistant", content: "Got the results!" }]);
     expect(steps[1]?.done).toBe(true);
   });

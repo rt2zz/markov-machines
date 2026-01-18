@@ -46,3 +46,6 @@ export async function executeTool<S>(
     return { result: `Tool execution error: ${message}`, isError: true };
   }
 }
+
+// thinking either ctx.reply(contentBlock)
+// or add a new union to ToolExecutionResult, Array<ToolReply,ToolResult> which can be used to split into two categories in the ecxecutor

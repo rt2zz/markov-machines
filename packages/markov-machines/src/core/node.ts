@@ -1,13 +1,31 @@
 import { v4 as uuid } from "uuid";
-import type { Node, NodeConfig } from "../types/node.js";
+import type { Node, NodeConfig, OutputConfig } from "../types/node.js";
+
+/**
+ * Create a new node instance without structured output.
+ * @typeParam S - The node's state type.
+ */
+export function createNode<S>(config: NodeConfig<S>): Node<S, never>;
+
+/**
+ * Create a new node instance with structured output.
+ * @typeParam S - The node's state type.
+ * @typeParam M - The output message type.
+ */
+export function createNode<S, M>(
+  config: NodeConfig<S, M> & { output: OutputConfig<M> },
+): Node<S, M>;
 
 /**
  * Create a new node instance.
  * Node has no knowledge of Charter - it only knows about its own state type S.
  *
  * @typeParam S - The node's state type.
+ * @typeParam M - The output message type (never = no structured output).
  */
-export function createNode<S>(config: NodeConfig<S>): Node<S> {
+export function createNode<S, M = never>(
+  config: NodeConfig<S, M>,
+): Node<S, M> {
   const {
     instructions,
     tools = {},
@@ -17,6 +35,7 @@ export function createNode<S>(config: NodeConfig<S>): Node<S> {
     initialState,
     packs,
     executorConfig,
+    output,
   } = config;
 
   // Validate tool names match their keys
@@ -49,5 +68,6 @@ export function createNode<S>(config: NodeConfig<S>): Node<S> {
     initialState,
     packs,
     executorConfig,
+    output,
   };
 }

@@ -2,6 +2,7 @@ import type { Machine } from "../types/machine.js";
 import type { RunOptions, MachineStep } from "../executor/types.js";
 import type { Instance } from "../types/instance.js";
 import type { Command } from "../types/commands.js";
+import type { Message } from "../types/messages.js";
 import { getInstancePath } from "../types/instance.js";
 import { userMessage } from "../types/messages.js";
 import { isCommand } from "../types/commands.js";
@@ -135,12 +136,14 @@ function rebuildTreeAfterCede(
  * - Execute command via runCommand()
  * - Yield step with yieldReason "command"
  * - Return immediately (caller handles any cascade)
+ *
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export async function* runMachine(
-  machine: Machine,
+export async function* runMachine<AppMessage = unknown>(
+  machine: Machine<AppMessage>,
   input: RunMachineInput,
-  options?: RunOptions,
-): AsyncGenerator<MachineStep> {
+  options?: RunOptions<AppMessage>,
+): AsyncGenerator<MachineStep<AppMessage>> {
   // Handle Command input
   if (isCommand(input)) {
     const { machine: updatedMachine, result } = await runCommand(
@@ -158,9 +161,6 @@ export async function* runMachine(
       instance: updatedMachine.instance,
       messages: [userMessage(commandMessage)],
       yieldReason: "command",
-      response: result.success
-        ? (typeof result.value === "string" ? result.value : JSON.stringify(result.value ?? null))
-        : result.error ?? "Command failed",
       done: true,
     };
     return;
@@ -171,8 +171,8 @@ export async function* runMachine(
   let currentInput = input;
 
   // Base history from before this run
-  const baseHistory = machine.history ?? [];
-  let currentHistory = baseHistory;
+  const baseHistory: Message<AppMessage>[] = machine.history ?? [];
+  let currentHistory: Message<AppMessage>[] = baseHistory;
 
   const maxSteps = options?.maxSteps ?? 50;
   let steps = 0;
@@ -209,7 +209,7 @@ export async function* runMachine(
 
     if (options?.debug) {
       console.log(`[runMachine]   Result yieldReason: ${result.yieldReason}`);
-      console.log(`[runMachine]   Result response: "${result.response.slice(0, 100)}${result.response.length > 100 ? '...' : ''}"`);
+      console.log(`[runMachine]   Result messages: ${result.messages.length}`);
     }
 
     // Handle cede: rebuild tree without the ceded child
@@ -221,14 +221,13 @@ export async function* runMachine(
         instance: currentInstance,
         messages: result.messages,
         yieldReason: "cede",
-        response: result.response,
         done: false,
         cedePayload: result.cedePayload,
       };
 
       // Prepare for parent's turn with cede payload
       if (result.cedePayload) {
-        const cedeMessage = userMessage(
+        const cedeMessage = userMessage<AppMessage>(
           `[Child completed: ${JSON.stringify(result.cedePayload)}]`
         );
         currentHistory = [...baseHistory, cedeMessage];
@@ -254,15 +253,14 @@ export async function* runMachine(
         instance: currentInstance,
         messages: result.messages,
         yieldReason: result.yieldReason,
-        response: result.response,
         done: false,
       };
 
       // Add recovery message and continue
-      const recoveryMessage = userMessage(
+      const recoveryMessage = userMessage<AppMessage>(
         `[System: Your response was cut off due to length limits. Please provide a brief summary of your findings and respond to the user now. Do not use any tools - just give your final answer.]`
       );
-      currentHistory = [...currentHistory, ...result.messages, recoveryMessage];
+      currentHistory = [...currentHistory, ...(result.messages as Message<AppMessage>[]), recoveryMessage];
       currentInput = "";
       continue;
     }
@@ -277,7 +275,6 @@ export async function* runMachine(
       instance: currentInstance,
       messages: result.messages,
       yieldReason: result.yieldReason,
-      response: result.response,
       done: isFinal,
     };
 
@@ -287,7 +284,7 @@ export async function* runMachine(
 
     // Not final - continue to next step
     // Accumulate messages so Claude sees tool calls and results
-    currentHistory = [...currentHistory, ...result.messages];
+    currentHistory = [...currentHistory, ...(result.messages as Message<AppMessage>[])];
     currentInput = "";
   }
 
@@ -297,13 +294,15 @@ export async function* runMachine(
 /**
  * Run the machine to completion, returning only the final step.
  * Convenience wrapper for cases that don't need step-by-step control.
+ *
+ * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
  */
-export async function runMachineToCompletion(
-  machine: Machine,
+export async function runMachineToCompletion<AppMessage = unknown>(
+  machine: Machine<AppMessage>,
   input: RunMachineInput,
-  options?: RunOptions,
-): Promise<MachineStep> {
-  let lastStep: MachineStep | null = null;
+  options?: RunOptions<AppMessage>,
+): Promise<MachineStep<AppMessage>> {
+  let lastStep: MachineStep<AppMessage> | null = null;
   for await (const step of runMachine(machine, input, options)) {
     lastStep = step;
   }

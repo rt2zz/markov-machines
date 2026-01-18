@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
 import type {
   MessageParam,
   ContentBlock as AnthropicContentBlock,
@@ -11,6 +12,7 @@ import type {
   Message,
   ContentBlock,
   ToolResultBlock,
+  OutputBlock,
 } from "../types/messages.js";
 import type { Transition } from "../types/transitions.js";
 import {
@@ -22,7 +24,6 @@ import {
   userMessage,
   assistantMessage,
   toolResult,
-  getMessageText,
 } from "../types/messages.js";
 import { generateToolDefinitions } from "../tools/tool-generator.js";
 import { updateState } from "../runtime/state-manager.js";
@@ -48,7 +49,7 @@ const TRANSITION_PREFIX = "transition_";
  * Standard executor implementation using Anthropic SDK.
  * Makes exactly ONE API call per run(), processes tools, and returns.
  */
-export class StandardExecutor implements Executor {
+export class StandardExecutor implements Executor<unknown> {
   type = "standard" as const;
   private client: Anthropic;
   private model: string;
@@ -77,12 +78,12 @@ export class StandardExecutor implements Executor {
    * @returns Result containing response, updated instance, messages, and stop reason
    */
   async run(
-    charter: Charter,
+    charter: Charter<unknown>,
     instance: Instance,
     ancestors: Instance[],
     input: string,
-    options?: RunOptions,
-  ): Promise<RunResult> {
+    options?: RunOptions<unknown>,
+  ): Promise<RunResult<unknown>> {
     let currentState = instance.state;
     let currentNode = instance.node;
     let currentChildren = instance.child;
@@ -166,15 +167,40 @@ export class StandardExecutor implements Executor {
     const effectiveMaxTokens = (execConfig.maxTokens as number | undefined) ?? this.maxTokens;
     const effectiveTemperature = execConfig.temperature as number | undefined; // undefined = use API default
 
-    // Make ONE API call
-    const response = await this.client.messages.create({
+    // Build structured output format if node has output config (beta feature)
+    let outputFormat: { type: "json_schema"; json_schema: { name: string; schema: unknown } } | undefined;
+    if (currentNode.output?.schema) {
+      const jsonSchema = z.toJSONSchema(currentNode.output.schema, {
+        target: "openApi3",
+      });
+      outputFormat = {
+        type: "json_schema",
+        json_schema: {
+          name: `${currentNode.id}_output`,
+          schema: jsonSchema,
+        },
+      };
+    }
+
+    // Make ONE API call (use beta endpoint for structured outputs if needed)
+    const apiParams = {
       model: effectiveModel,
       max_tokens: effectiveMaxTokens,
       ...(effectiveTemperature !== undefined && { temperature: effectiveTemperature }),
       system: systemPrompt,
       messages: conversationHistory,
       tools: anthropicTools,
-    });
+    };
+
+    const response = outputFormat
+      ? await this.client.beta.messages.create({
+          ...apiParams,
+          // Type cast needed as SDK types may not match API exactly for beta features
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          output_format: outputFormat as any,
+          betas: ["structured-outputs-2025-11-13"],
+        })
+      : await this.client.messages.create(apiParams);
 
     // Debug: log the response
     if (this.debug) {
@@ -183,7 +209,20 @@ export class StandardExecutor implements Executor {
     }
 
     // Convert response content to our format
-    const assistantContent = this.convertContentBlocks(response.content);
+    // Cast needed because beta and non-beta responses have different content block types
+    let assistantContent = this.convertContentBlocks(response.content as AnthropicContentBlock[]);
+
+    // If node has structured output, transform text blocks to OutputBlocks
+    if (currentNode.output?.mapTextBlock) {
+      assistantContent = assistantContent.map((block) => {
+        if (block.type === "text") {
+          const mapped = currentNode.output!.mapTextBlock(block.text);
+          return { type: "output", data: mapped } as OutputBlock<unknown>;
+        }
+        return block;
+      });
+    }
+
     const assistantMsg = assistantMessage(assistantContent);
     newMessages.push(assistantMsg);
 
@@ -454,9 +493,6 @@ export class StandardExecutor implements Executor {
     }
     // else: end_turn - yieldReason already set to "end_turn"
 
-    // Extract text response
-    const textResponse = getMessageText(assistantMsg);
-
     // Build updated instance
     const updatedInstance = this.buildUpdatedInstance(
       instance,
@@ -469,7 +505,6 @@ export class StandardExecutor implements Executor {
     );
 
     return {
-      response: textResponse,
       instance: updatedInstance,
       messages: newMessages,
       yieldReason,
@@ -679,7 +714,7 @@ ${transitionList || "None"}`;
   /**
    * Convert our Message format to Anthropic MessageParam format.
    */
-  private convertMessageToParam(msg: Message): MessageParam {
+  private convertMessageToParam(msg: Message<unknown>): MessageParam {
     if (typeof msg.content === "string") {
       return { role: msg.role, content: msg.content };
     }
@@ -703,6 +738,13 @@ ${transitionList || "None"}`;
           tool_use_id: block.tool_use_id,
           content: block.content,
           ...(block.is_error !== undefined && { is_error: block.is_error }),
+        };
+      }
+      // OutputBlock - convert back to text for history
+      if (block.type === "output") {
+        return {
+          type: "text" as const,
+          text: JSON.stringify(block.data, null, 2),
         };
       }
       // Thinking blocks - skip or convert
