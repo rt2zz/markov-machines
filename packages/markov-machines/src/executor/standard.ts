@@ -12,7 +12,6 @@ import type {
   ContentBlock,
   OutputBlock,
 } from "../types/messages.js";
-import type { Transition } from "../types/transitions.js";
 import {
   userMessage,
   assistantMessage,
@@ -242,7 +241,7 @@ export class StandardExecutor implements Executor<unknown> {
 
         const result = await executeTransition(
           charter,
-          transition as Transition<unknown>,
+          transition,
           currentState,
           toolResult.queuedTransition.reason,
           toolResult.queuedTransition.args,
