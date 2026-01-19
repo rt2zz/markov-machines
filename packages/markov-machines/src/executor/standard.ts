@@ -24,6 +24,7 @@ import { handleTransitionResult } from "../runtime/transition-handler.js";
 import type {
   Executor,
   StandardExecutorConfig,
+  StandardNodeConfig,
   RunOptions,
   RunResult,
 } from "./types.js";
@@ -301,7 +302,7 @@ export class StandardExecutor implements Executor<unknown> {
     currentChildren: Instance | Instance[] | undefined,
     ancestors: Instance[],
     packStates: Record<string, unknown>,
-    executorConfig?: Record<string, unknown>,
+    executorConfig?: StandardNodeConfig,
   ): Instance {
     // Build the updated leaf instance
     // Include packStates only if this is the root instance (no ancestors)

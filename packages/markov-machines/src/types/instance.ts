@@ -1,5 +1,6 @@
 import { v4 as uuid } from "uuid";
 import type { Node } from "./node.js";
+import type { StandardNodeConfig } from "../executor/types.js";
 
 /**
  * Helper to extract state type from a Node type.
@@ -26,8 +27,7 @@ export interface Instance<N extends Node<any> = Node> {
   /** Pack states (only on root instance, shared across all nodes) */
   packStates?: Record<string, unknown>;
   /** Effective executor config for this instance (override or from node) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  executorConfig?: Record<string, any>;
+  executorConfig?: StandardNodeConfig;
 }
 
 /**
@@ -40,8 +40,7 @@ export function createInstance<N extends Node<any>>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   child?: Instance<any> | Instance<any>[],
   packStates?: Record<string, unknown>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  executorConfig?: Record<string, any>,
+  executorConfig?: StandardNodeConfig,
 ): Instance<N> {
   return {
     id: uuid(),
@@ -111,16 +110,39 @@ export function getInstancePath(instance: Instance): Instance[] {
 /**
  * Get ALL instances in the tree (depth-first).
  * Traverses all children in arrays.
+ * Includes cycle detection and max depth protection.
+ *
+ * @param instance - The root instance to start traversal from
+ * @param maxDepth - Maximum depth to traverse (default 100, protects against cycles)
+ * @returns Array of all instances in the tree
+ * @throws Error if a cycle is detected or max depth is exceeded
  */
-export function getAllInstances(instance: Instance): Instance[] {
-  const result: Instance[] = [instance];
-  if (instance.child) {
-    const children = Array.isArray(instance.child)
-      ? instance.child
-      : [instance.child];
-    for (const child of children) {
-      result.push(...getAllInstances(child));
+export function getAllInstances(instance: Instance, maxDepth = 100): Instance[] {
+  const visited = new Set<string>();
+
+  function traverse(inst: Instance, depth: number): Instance[] {
+    if (depth > maxDepth) {
+      throw new Error(
+        `Max depth (${maxDepth}) exceeded in instance tree traversal. Possible cycle detected.`,
+      );
     }
+
+    if (visited.has(inst.id)) {
+      throw new Error(
+        `Cycle detected in instance tree: instance "${inst.id}" was already visited.`,
+      );
+    }
+    visited.add(inst.id);
+
+    const result: Instance[] = [inst];
+    if (inst.child) {
+      const children = Array.isArray(inst.child) ? inst.child : [inst.child];
+      for (const child of children) {
+        result.push(...traverse(child, depth + 1));
+      }
+    }
+    return result;
   }
-  return result;
+
+  return traverse(instance, 0);
 }

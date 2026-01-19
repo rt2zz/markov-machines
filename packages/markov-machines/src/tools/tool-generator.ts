@@ -9,12 +9,27 @@ import {
   isGeneralTransition,
   transitionHasArguments,
 } from "../types/transitions.js";
-import { isRef } from "../types/refs.js";
+import { resolveTransitionRef } from "../runtime/ref-resolver.js";
+
+/**
+ * Track tool sources for collision detection.
+ * Maps tool name to its source for error messages.
+ */
+type ToolSource =
+  | "builtin:updateState"
+  | "builtin:transition"
+  | `builtin:transition_${string}`
+  | "node"
+  | `ancestor:${string}`
+  | "charter"
+  | `pack:${string}`;
 
 /**
  * Generate Anthropic tool definitions for a node.
  * Includes: updateState, transition tools, current node tools, ancestor tools, and charter tools.
  * Child tools shadow parent tools (closest match wins).
+ *
+ * @throws Error if a tool name from a lower-priority scope conflicts with a higher-priority scope
  */
 export function generateToolDefinitions<S>(
   charter: Charter,
@@ -22,7 +37,19 @@ export function generateToolDefinitions<S>(
   ancestorNodes: Node<unknown>[] = [],
 ): AnthropicToolDefinition[] {
   const tools: AnthropicToolDefinition[] = [];
-  const seenNames = new Set<string>();
+  const toolSources = new Map<string, ToolSource>();
+
+  /**
+   * Check for tool name collision and throw descriptive error if found.
+   */
+  function checkCollision(name: string, newSource: ToolSource): void {
+    const existingSource = toolSources.get(name);
+    if (existingSource) {
+      throw new Error(
+        `Tool "${name}" from ${newSource} conflicts with existing tool from ${existingSource}`,
+      );
+    }
+  }
 
   // 1. Add updateState tool
   const patchValidator =
@@ -42,7 +69,7 @@ export function generateToolDefinitions<S>(
       required: ["patch"],
     },
   });
-  seenNames.add("updateState");
+  toolSources.set("updateState", "builtin:updateState");
 
   // 2. Add transition tools
   const transitionsWithoutArgs: string[] = [];
@@ -53,7 +80,7 @@ export function generateToolDefinitions<S>(
   }> = [];
 
   for (const [name, transition] of Object.entries(node.transitions)) {
-    const resolved = resolveTransition(charter, transition);
+    const resolved = resolveTransitionRef(charter, transition);
     const hasArgs = transitionHasArguments(resolved);
 
     if (hasArgs) {
@@ -91,7 +118,7 @@ export function generateToolDefinitions<S>(
         required: ["to", "reason"],
       },
     });
-    seenNames.add("transition");
+    toolSources.set("transition", "builtin:transition");
   }
 
   // Add named transition tools
@@ -112,18 +139,19 @@ export function generateToolDefinitions<S>(
         required: ["reason", ...Object.keys(t.argsSchema)],
       },
     });
-    seenNames.add(toolName);
+    toolSources.set(toolName, `builtin:transition_${t.name}` as ToolSource);
   }
 
-  // 3. Add current node's tools (highest priority - added first to seenNames)
+  // 3. Add current node's tools (highest priority after builtins)
   for (const [name, tool] of Object.entries(node.tools)) {
-    if (seenNames.has(name)) continue;
+    // Node tools cannot shadow builtin tools
+    checkCollision(name, "node");
 
     // Handle Anthropic built-in tools (server-side).
     // Built-in tools have a different shape than standard tools, requiring a cast.
     if (isAnthropicBuiltinTool(tool)) {
       tools.push({ type: tool.builtinType, name: tool.name } as unknown as AnthropicToolDefinition);
-      seenNames.add(name);
+      toolSources.set(name, "node");
       continue;
     }
 
@@ -135,7 +163,7 @@ export function generateToolDefinitions<S>(
       description: tool.description,
       input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
     });
-    seenNames.add(name);
+    toolSources.set(name, "node");
   }
 
   // 4. Add ancestor tools (from nearest to farthest)
@@ -144,13 +172,16 @@ export function generateToolDefinitions<S>(
     const ancestorNode = ancestorNodes[i];
     if (!ancestorNode) continue;
     for (const [name, tool] of Object.entries(ancestorNode.tools)) {
-      if (seenNames.has(name)) continue; // Child already has this tool
+      // Skip if higher-priority scope already has this tool (node or nearer ancestor)
+      if (toolSources.has(name)) continue;
+
+      const ancestorSource = `ancestor:${ancestorNode.id}` as ToolSource;
 
       // Handle Anthropic built-in tools (server-side).
       // Built-in tools have a different shape than standard tools, requiring a cast.
       if (isAnthropicBuiltinTool(tool)) {
         tools.push({ type: tool.builtinType, name: tool.name } as unknown as AnthropicToolDefinition);
-        seenNames.add(name);
+        toolSources.set(name, ancestorSource);
         continue;
       }
 
@@ -162,13 +193,15 @@ export function generateToolDefinitions<S>(
         description: tool.description,
         input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
       });
-      seenNames.add(name);
+      toolSources.set(name, ancestorSource);
     }
   }
 
   // 5. Add charter tools
   for (const [name, tool] of Object.entries(charter.tools)) {
-    if (seenNames.has(name)) continue; // Node/ancestor already has this tool
+    // Skip if higher-priority scope already has this tool
+    if (toolSources.has(name)) continue;
+
     const inputSchema = z.toJSONSchema(tool.inputSchema, {
       target: "openapi-3.0",
     });
@@ -177,13 +210,15 @@ export function generateToolDefinitions<S>(
       description: tool.description,
       input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
     });
-    seenNames.add(name);
+    toolSources.set(name, "charter");
   }
 
   // 6. Add pack tools (lowest priority - only for packs on current node)
   for (const pack of node.packs ?? []) {
     for (const [name, tool] of Object.entries(pack.tools)) {
-      if (seenNames.has(name)) continue; // Higher priority tool already exists
+      // Skip if higher-priority scope already has this tool
+      if (toolSources.has(name)) continue;
+
       const inputSchema = z.toJSONSchema(tool.inputSchema, {
         target: "openapi-3.0",
       });
@@ -192,28 +227,11 @@ export function generateToolDefinitions<S>(
         description: tool.description,
         input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
       });
-      seenNames.add(name);
+      toolSources.set(name, `pack:${pack.name}` as ToolSource);
     }
   }
 
   return tools;
-}
-
-/**
- * Resolve a transition reference to the actual transition.
- */
-function resolveTransition<S>(
-  charter: Charter,
-  transition: Transition<S>,
-): Transition<S> {
-  if (isRef(transition)) {
-    const resolved = charter.transitions[transition.ref];
-    if (!resolved) {
-      throw new Error(`Unknown transition ref: ${transition.ref}`);
-    }
-    return resolved as Transition<S>;
-  }
-  return transition;
 }
 
 /**

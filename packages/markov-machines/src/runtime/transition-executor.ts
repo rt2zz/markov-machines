@@ -16,6 +16,7 @@ import {
 } from "../types/transitions.js";
 import { isRef, isSerialTransition } from "../types/refs.js";
 import { createHelpers } from "../core/transition.js";
+import { resolveTransitionRef } from "./ref-resolver.js";
 
 /**
  * Execute a transition and return the result.
@@ -32,14 +33,7 @@ export async function executeTransition<S>(
   const helpers = createHelpers();
 
   // Resolve ref to actual transition
-  const resolved = isRef(transition)
-    ? charter.transitions[transition.ref]
-    : transition;
-
-  if (!resolved) {
-    const refInfo = isRef(transition) ? `ref "${transition.ref}"` : "inline transition";
-    throw new Error(`Could not resolve transition: ${refInfo}`);
-  }
+  const resolved = resolveTransitionRef(charter, transition);
 
   // Code transition - execute with helpers
   if (isCodeTransition<S>(resolved)) {
@@ -68,7 +62,11 @@ export async function executeTransition<S>(
     return transitionTo(deserializeNode(charter, resolved.node));
   }
 
-  throw new Error(`Unknown transition type: ${typeof resolved === "object" ? JSON.stringify(Object.keys(resolved)) : typeof resolved}`);
+  const typeInfo =
+    typeof resolved === "object" && resolved !== null
+      ? `object with keys: ${Object.keys(resolved).join(", ")}`
+      : typeof resolved;
+  throw new Error(`Unknown transition type: ${typeInfo}`);
 }
 
 /**

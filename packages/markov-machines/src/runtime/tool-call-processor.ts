@@ -153,6 +153,10 @@ async function handleRegularTool(
           ctx: { state: unknown; updateState: (patch: Partial<unknown>) => void },
         ) => Promise<unknown> | unknown;
       };
+
+      // Track pack state validation errors
+      let packStateError: string | undefined;
+
       const result = await packTool.execute(toolInput, {
         state: packState,
         updateState: (patch: Partial<unknown>) => {
@@ -161,9 +165,23 @@ async function handleRegularTool(
           const parseResult = pack.validator.safeParse(merged);
           if (parseResult.success) {
             packStates[packName] = parseResult.data;
+          } else {
+            packStateError = `Pack state validation failed: ${parseResult.error.message}`;
           }
         },
       });
+
+      // If there was a pack state validation error, include it in the result
+      if (packStateError) {
+        const resultStr = typeof result === "string" ? result : JSON.stringify(result);
+        return {
+          newCurrentState: currentState,
+          results: [
+            toolResult(id, `${resultStr}\n\nWarning: ${packStateError}`, false),
+          ],
+        };
+      }
+
       return {
         newCurrentState: currentState,
         results: [

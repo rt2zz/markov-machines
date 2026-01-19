@@ -3,6 +3,7 @@ import type { Transition } from "./transitions.js";
 import type { AnyToolDefinition, AnthropicBuiltinTool } from "./tools.js";
 import type { AnyCommandDefinition } from "./commands.js";
 import type { Pack } from "./pack.js";
+import type { StandardNodeConfig } from "../executor/types.js";
 
 /**
  * Tool entry - either a regular tool definition or an Anthropic builtin tool.
@@ -44,8 +45,7 @@ export interface NodeConfig<S = unknown, M = never> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   packs?: Pack<any>[];
   /** Per-node executor configuration (overrides executor defaults) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  executorConfig?: Record<string, any>;
+  executorConfig?: StandardNodeConfig;
   /** Structured output configuration */
   output?: OutputConfig<M>;
 }
@@ -75,8 +75,7 @@ export interface Node<S = unknown, M = never> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   packs?: Pack<any>[];
   /** Per-node executor configuration (overrides executor defaults) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  executorConfig?: Record<string, any>;
+  executorConfig?: StandardNodeConfig;
   /** Structured output configuration */
   output?: OutputConfig<M>;
 }
