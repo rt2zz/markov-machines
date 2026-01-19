@@ -6,44 +6,28 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import type { Charter } from "../types/charter.js";
 import type { Instance } from "../types/instance.js";
-import { createInstance } from "../types/instance.js";
 import type { Node } from "../types/node.js";
 import type {
   Message,
   ContentBlock,
-  ToolResultBlock,
   OutputBlock,
 } from "../types/messages.js";
 import type { Transition } from "../types/transitions.js";
 import {
-  isTransitionToResult,
-  isSpawnResult,
-  isCedeResult,
-} from "../types/transitions.js";
-import {
   userMessage,
   assistantMessage,
-  toolResult,
 } from "../types/messages.js";
 import { generateToolDefinitions } from "../tools/tool-generator.js";
-import { updateState } from "../runtime/state-manager.js";
-import { executeTool } from "../runtime/tool-executor.js";
 import { executeTransition } from "../runtime/transition-executor.js";
-import {
-  resolveTool,
-} from "../runtime/ref-resolver.js";
-import { isAnthropicBuiltinTool } from "../types/tools.js";
+import { buildSystemPrompt } from "../runtime/system-prompt.js";
+import { processToolCalls } from "../runtime/tool-call-processor.js";
+import { handleTransitionResult } from "../runtime/transition-handler.js";
 import type {
   Executor,
   StandardExecutorConfig,
   RunOptions,
   RunResult,
 } from "./types.js";
-
-// Tool name constants
-const TOOL_UPDATE_STATE = "updateState";
-const TOOL_TRANSITION = "transition";
-const TRANSITION_PREFIX = "transition_";
 
 /**
  * Standard executor implementation using Anthropic SDK.
@@ -69,13 +53,6 @@ export class StandardExecutor implements Executor<unknown> {
   /**
    * Execute a single API call for the given instance.
    * Processes tool calls and returns the result.
-   *
-   * @param charter - The charter for ref resolution and executor access
-   * @param instance - The current node instance being executed
-   * @param ancestors - Parent instances from root to parent (for tool context)
-   * @param input - User input message (may be empty for continuation)
-   * @param options - Run options including history, step limits, and debug flag
-   * @returns Result containing response, updated instance, messages, and stop reason
    */
   async run(
     charter: Charter<unknown>,
@@ -90,15 +67,9 @@ export class StandardExecutor implements Executor<unknown> {
     let currentExecutorConfig = instance.executorConfig;
     const newMessages: Message[] = [];
 
-    // Build ancestor state map for tool execution
-    const ancestorStates = new Map<Instance, unknown>();
-    for (const ancestor of ancestors) {
-      ancestorStates.set(ancestor, ancestor.state);
-    }
-
     // Get pack states from root instance (first ancestor or current instance)
     const rootInstance = ancestors[0] ?? instance;
-    const packStates: Record<string, unknown> = { ...(rootInstance.packStates ?? {}) };
+    let packStates: Record<string, unknown> = { ...(rootInstance.packStates ?? {}) };
 
     // Build conversation history for API, including previous history
     const conversationHistory: MessageParam[] = [];
@@ -123,9 +94,8 @@ export class StandardExecutor implements Executor<unknown> {
       ancestors.map((a) => a.node),
     );
 
-    // Build system prompt
-    const systemPrompt = this.buildSystemPrompt(
-      charter,
+    // Build system prompt (delegated)
+    const systemPrompt = buildSystemPrompt(
       currentNode,
       currentState,
       ancestors,
@@ -233,266 +203,67 @@ export class StandardExecutor implements Executor<unknown> {
     if (response.stop_reason === "max_tokens") {
       yieldReason = "max_tokens";
     } else if (response.stop_reason === "tool_use") {
-      // Process tool calls synchronously
-      const toolResults: ToolResultBlock[] = [];
-      let queuedTransition: {
-        name: string;
-        reason: string;
-        args: unknown;
-      } | null = null;
+      // Extract tool calls from response
+      const toolCalls = response.content
+        .filter((block): block is { type: "tool_use"; id: string; name: string; input: unknown } =>
+          block.type === "tool_use"
+        )
+        .map(({ id, name, input }) => ({ id, name, input }));
 
-      for (const block of response.content) {
-        if (block.type !== "tool_use") continue;
-
-        const { id, name, input: toolInput } = block;
-
-        // Handle updateState
-        if (name === TOOL_UPDATE_STATE) {
-          const patch = (toolInput as { patch: Partial<unknown> }).patch;
-          const result = updateState(
-            currentState,
-            patch,
-            currentNode.validator,
-          );
-
-          if (result.success) {
-            currentState = result.state;
-            toolResults.push(toolResult(id, "State updated successfully"));
-          } else {
-            toolResults.push(
-              toolResult(id, `State update failed: ${result.error}`, true),
-            );
-          }
-          continue;
-        }
-
-        // Handle default transition tool
-        if (name === TOOL_TRANSITION) {
-          if (queuedTransition) {
-            toolResults.push(
-              toolResult(id, "Only one transition allowed per turn", true),
-            );
-            continue;
-          }
-
-          const { to, reason } = toolInput as { to: string; reason: string };
-          queuedTransition = { name: to, reason, args: {} };
-          toolResults.push(toolResult(id, `Transition to "${to}" queued`));
-          continue;
-        }
-
-        // Handle named transition tools
-        if (name.startsWith(TRANSITION_PREFIX)) {
-          if (queuedTransition) {
-            toolResults.push(
-              toolResult(id, "Only one transition allowed per turn", true),
-            );
-            continue;
-          }
-
-          const transitionName = name.slice(TRANSITION_PREFIX.length);
-          const { reason, ...args } = toolInput as {
-            reason: string;
-            [key: string]: unknown;
-          };
-          queuedTransition = { name: transitionName, reason, args };
-          toolResults.push(
-            toolResult(id, `Transition to "${transitionName}" queued`),
-          );
-          continue;
-        }
-
-        // Check if this is an Anthropic builtin tool (server-side, handled by API)
-        const nodeToolEntry = currentNode.tools[name];
-        if (nodeToolEntry && isAnthropicBuiltinTool(nodeToolEntry)) {
-          // Builtin tools are handled server-side by Anthropic
-          // The results are already in the response, no execution needed
-          continue;
-        }
-
-        // Resolve and execute tool (walks up ancestor tree)
-        const resolved = resolveTool(
+      // Process tool calls (delegated)
+      const toolResult = await processToolCalls(
+        {
           charter,
-          { id: instance.id, node: currentNode, state: currentState },
+          instance,
           ancestors,
-          name,
-        );
+          packStates,
+          currentState,
+          currentNode,
+        },
+        toolCalls,
+      );
 
-        if (resolved) {
-          const { tool, owner } = resolved;
-
-          // Check if this is a pack tool
-          if (typeof owner === "object" && "pack" in owner) {
-            // Pack tool - use pack state
-            const packName = owner.pack;
-            const pack = charter.packs.find((p) => p.name === packName);
-            if (!pack) {
-              toolResults.push(toolResult(id, `Pack not found: ${packName}`, true));
-              continue;
-            }
-            const packState = packStates[packName] ?? pack.initialState;
-
-            // Execute pack tool with pack context
-            try {
-              const packTool = tool as { execute: (input: unknown, ctx: { state: unknown; updateState: (patch: Partial<unknown>) => void }) => Promise<unknown> | unknown };
-              const result = await packTool.execute(toolInput, {
-                state: packState,
-                updateState: (patch: Partial<unknown>) => {
-                  // Validate and update pack state
-                  const merged = { ...(packState ?? {}), ...patch };
-                  const parseResult = pack.validator.safeParse(merged);
-                  if (parseResult.success) {
-                    packStates[packName] = parseResult.data;
-                  }
-                },
-              });
-              toolResults.push(toolResult(id, typeof result === "string" ? result : JSON.stringify(result)));
-            } catch (error) {
-              const errorMsg = error instanceof Error ? error.message : String(error);
-              toolResults.push(toolResult(id, `Tool error: ${errorMsg}`, true));
-            }
-            continue;
-          }
-
-          // Skip Anthropic builtin tools (handled server-side)
-          if (isAnthropicBuiltinTool(tool)) {
-            continue;
-          }
-
-          // Non-pack tool - determine which state to use and how to update it
-          let toolState: unknown;
-          let onUpdate: (patch: Partial<unknown>) => void;
-
-          if (owner === "charter") {
-            toolState = currentState;
-            onUpdate = (patch) => {
-              const result = updateState(
-                currentState,
-                patch,
-                currentNode.validator,
-              );
-              if (result.success) {
-                currentState = result.state;
-              }
-            };
-          } else if (owner === instance || owner.node.id === currentNode.id) {
-            toolState = currentState;
-            onUpdate = (patch) => {
-              const result = updateState(
-                currentState,
-                patch,
-                currentNode.validator,
-              );
-              if (result.success) {
-                currentState = result.state;
-              }
-            };
-          } else {
-            toolState = ancestorStates.get(owner) ?? owner.state;
-            onUpdate = (patch) => {
-              const ownerState = ancestorStates.get(owner) ?? owner.state;
-              const result = updateState(
-                ownerState,
-                patch,
-                owner.node.validator,
-              );
-              if (result.success) {
-                ancestorStates.set(owner, result.state);
-              }
-            };
-          }
-
-          const { result: toolResultStr, isError, userMessage } = await executeTool(
-            tool,
-            toolInput,
-            toolState,
-            onUpdate,
-          );
-          toolResults.push(toolResult(id, toolResultStr, isError));
-          // Add user message block if present (from toolReply)
-          if (userMessage !== undefined) {
-            if (typeof userMessage === "string") {
-              toolResults.push({ type: "text", text: userMessage });
-            } else {
-              toolResults.push({ type: "output", data: userMessage });
-            }
-          }
-          continue;
-        }
-
-        // Unknown tool
-        toolResults.push(toolResult(id, `Unknown tool: ${name}`, true));
-      }
+      // Update state from tool processing
+      currentState = toolResult.currentState;
+      packStates = toolResult.packStates;
 
       // Add tool results to messages
-      if (toolResults.length > 0) {
-        const toolResultMsg = userMessage(toolResults);
+      if (toolResult.toolResults.length > 0) {
+        const toolResultMsg = userMessage(toolResult.toolResults);
         newMessages.push(toolResultMsg);
       }
 
-      // Execute queued transition
-      if (queuedTransition) {
-        const transition = currentNode.transitions[queuedTransition.name];
+      // Execute queued transition if any
+      if (toolResult.queuedTransition) {
+        const transition = currentNode.transitions[toolResult.queuedTransition.name];
         if (!transition) {
-          throw new Error(`Unknown transition: ${queuedTransition.name}`);
+          throw new Error(`Unknown transition: ${toolResult.queuedTransition.name}`);
         }
 
         const result = await executeTransition(
           charter,
           transition as Transition<unknown>,
           currentState,
-          queuedTransition.reason,
-          queuedTransition.args,
+          toolResult.queuedTransition.reason,
+          toolResult.queuedTransition.args,
         );
 
-        // Handle discriminated union
-        if (isCedeResult(result)) {
-          // Cede: return with cede yield reason
-          yieldReason = "cede";
-          cedePayload = result.payload;
-        } else if (isSpawnResult(result)) {
-          // Spawn: add children to current instance
-          const newChildren = result.children.map(({ node, state, executorConfig: childExecConfig }) =>
-            createInstance(
-              node,
-              state ?? node.initialState,
-              undefined, // child
-              undefined, // packStates
-              childExecConfig ?? node.executorConfig, // Apply config hierarchy
-            ),
-          );
+        // Handle transition result (delegated)
+        const outcome = handleTransitionResult(
+          result,
+          currentNode,
+          currentState,
+          currentChildren,
+        );
 
-          // Append to existing children
-          if (Array.isArray(currentChildren)) {
-            currentChildren = [...currentChildren, ...newChildren];
-          } else if (currentChildren) {
-            currentChildren = [currentChildren, ...newChildren];
-          } else {
-            currentChildren =
-              newChildren.length === 1 ? newChildren[0] : newChildren;
-          }
-          // Return with tool_use - more work to do
-          yieldReason = "tool_use";
-        } else if (isTransitionToResult(result)) {
-          // Normal transition
-          currentNode = result.node as Node<unknown>;
-
-          // Update state: use returned state, or node's initialState, or throw
-          if (result.state !== undefined) {
-            currentState = result.state;
-          } else if (currentNode.initialState !== undefined) {
-            currentState = currentNode.initialState;
-          } else {
-            throw new Error(
-              `Transition returned undefined state and target node has no initialState`,
-            );
-          }
-          // Update executor config: use transition override, or node default
-          currentExecutorConfig = result.executorConfig ?? currentNode.executorConfig;
-          // Clear children on transition to new node
-          currentChildren = undefined;
-          // Return with tool_use - more work to do on new node
-          yieldReason = "tool_use";
+        // Apply outcome
+        currentNode = outcome.node;
+        currentState = outcome.state;
+        currentChildren = outcome.children;
+        yieldReason = outcome.yieldReason;
+        cedePayload = outcome.cedePayload;
+        if (outcome.executorConfig !== undefined) {
+          currentExecutorConfig = outcome.executorConfig;
         }
       } else {
         // Tools were called but no transition - return tool_use
@@ -544,146 +315,6 @@ export class StandardExecutor implements Executor<unknown> {
       ...(isRoot && Object.keys(packStates).length > 0 ? { packStates } : {}),
       executorConfig,
     };
-  }
-
-  /**
-   * Build the system prompt for the current node.
-   * Includes node instructions, current state, available transitions,
-   * ancestor context, pack states, and step warnings.
-   *
-   * @param charter - The charter (unused but reserved for future extensions)
-   * @param node - The current node being executed
-   * @param state - Current state to display
-   * @param ancestors - Parent instances for context
-   * @param packStates - Current pack states
-   * @param options - Run options for step warning calculation
-   * @returns Complete system prompt string
-   */
-  protected buildSystemPrompt<S>(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    charter: Charter,
-    node: Node<S>,
-    state: S,
-    ancestors: Instance[],
-    packStates: Record<string, unknown>,
-    options?: RunOptions,
-  ): string {
-    let prompt = `${node.instructions}
-
-${this.buildStateSection(state)}
-
-${this.buildTransitionsSection(node.transitions)}`;
-
-    // Add ancestor context if any
-    if (ancestors.length > 0) {
-      prompt += `\n\n${this.buildAncestorContext(ancestors)}`;
-    }
-
-    // Add active packs section
-    const packsSection = this.buildPacksSection(node, packStates);
-    if (packsSection) {
-      prompt += `\n\n${packsSection}`;
-    }
-
-    // Add step limit warning if nearing max
-    const stepWarning = this.buildStepWarning(options);
-    if (stepWarning) {
-      prompt += `\n\n${stepWarning}`;
-    }
-
-    return prompt;
-  }
-
-  /**
-   * Build a step limit warning message if nearing or at max steps.
-   * Returns different urgency levels based on remaining steps.
-   *
-   * @param options - Run options containing currentStep and maxSteps
-   * @returns Warning message or null if not near limit
-   */
-  protected buildStepWarning(options?: RunOptions): string | null {
-    if (!options?.currentStep || !options?.maxSteps) {
-      return null;
-    }
-
-    const { currentStep, maxSteps } = options;
-    const remaining = maxSteps - currentStep;
-
-    if (remaining <= 0) {
-      return `⚠️ CRITICAL: This is your FINAL step. You MUST respond to the user now with whatever progress you have made. Do not use any tools.`;
-    } else if (remaining === 1) {
-      return `⚠️ WARNING: You have only 1 step remaining after this one. Wrap up your work and prepare to respond to the user.`;
-    } else if (remaining <= 2) {
-      return `⚠️ NOTICE: You have ${remaining} steps remaining. Start wrapping up your work soon.`;
-    }
-
-    return null;
-  }
-
-  /**
-   * Build the active packs section of the system prompt.
-   */
-  protected buildPacksSection<S>(
-    node: Node<S>,
-    packStates: Record<string, unknown>,
-  ): string {
-    const activePacks = node.packs ?? [];
-    if (activePacks.length === 0) return "";
-
-    const sections = activePacks.map((pack) => {
-      const state = packStates[pack.name];
-      return `### ${pack.name}
-${pack.description}
-State: \`\`\`json
-${JSON.stringify(state, null, 2)}
-\`\`\``;
-    });
-
-    return `## Active Packs\n${sections.join("\n\n")}`;
-  }
-
-  /**
-   * Build ancestor context section.
-   */
-  protected buildAncestorContext(ancestors: Instance[]): string {
-    const sections = ancestors.map((ancestor, i) => {
-      const depth = ancestors.length - i;
-      return `### Ancestor ${depth}: ${ancestor.node.instructions.slice(0, 100)}...
-State: ${JSON.stringify(ancestor.state, null, 2)}`;
-    });
-
-    return `## Ancestor Context
-${sections.join("\n\n")}`;
-  }
-
-  /**
-   * Build the state section of the system prompt.
-   */
-  protected buildStateSection<S>(state: S): string {
-    return `## Current Node State
-\`\`\`json
-${JSON.stringify(state, null, 2)}
-\`\`\``;
-  }
-
-  /**
-   * Build the transitions section of the system prompt.
-   */
-  protected buildTransitionsSection<S>(
-    transitions: Record<string, Transition<S>>,
-  ): string {
-    const transitionList = Object.entries(transitions)
-      .map(([name, t]) => {
-        let desc = "Transition";
-        if ("description" in t && typeof t.description === "string") {
-          desc = t.description;
-        }
-        return `- **${name}**: ${desc}`;
-      })
-      .join("\n");
-
-    return `## Available Transitions
-${transitionList || "None"}`;
   }
 
   /**

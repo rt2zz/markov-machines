@@ -1,0 +1,99 @@
+import type { Instance } from "../types/instance.js";
+import type { Node } from "../types/node.js";
+import type { TransitionResult } from "../types/transitions.js";
+import {
+  isTransitionToResult,
+  isSpawnResult,
+  isCedeResult,
+} from "../types/transitions.js";
+import { createInstance } from "../types/instance.js";
+
+export interface TransitionOutcome {
+  node: Node<unknown>;
+  state: unknown;
+  children: Instance | Instance[] | undefined;
+  executorConfig?: Record<string, unknown>;
+  yieldReason: "tool_use" | "cede";
+  cedePayload?: unknown;
+}
+
+/**
+ * Handle the result of executing a transition.
+ * Returns the outcome including new node/state and yield reason.
+ */
+export function handleTransitionResult(
+  result: TransitionResult<unknown>,
+  currentNode: Node<unknown>,
+  currentState: unknown,
+  currentChildren: Instance | Instance[] | undefined,
+): TransitionOutcome {
+  // Handle discriminated union
+  if (isCedeResult(result)) {
+    // Cede: return with cede yield reason
+    return {
+      node: currentNode,
+      state: currentState,
+      children: currentChildren,
+      yieldReason: "cede",
+      cedePayload: result.payload,
+    };
+  }
+
+  if (isSpawnResult(result)) {
+    // Spawn: add children to current instance
+    const newChildren = result.children.map(({ node, state, executorConfig: childExecConfig }) =>
+      createInstance(
+        node,
+        state ?? node.initialState,
+        undefined, // child
+        undefined, // packStates
+        childExecConfig ?? node.executorConfig, // Apply config hierarchy
+      ),
+    );
+
+    // Append to existing children
+    let updatedChildren: Instance | Instance[] | undefined;
+    if (Array.isArray(currentChildren)) {
+      updatedChildren = [...currentChildren, ...newChildren];
+    } else if (currentChildren) {
+      updatedChildren = [currentChildren, ...newChildren];
+    } else {
+      updatedChildren = newChildren.length === 1 ? newChildren[0] : newChildren;
+    }
+
+    return {
+      node: currentNode,
+      state: currentState,
+      children: updatedChildren,
+      yieldReason: "tool_use", // More work to do
+    };
+  }
+
+  if (isTransitionToResult(result)) {
+    // Normal transition
+    const newNode = result.node as Node<unknown>;
+
+    // Update state: use returned state, or node's initialState, or throw
+    let newState: unknown;
+    if (result.state !== undefined) {
+      newState = result.state;
+    } else if (newNode.initialState !== undefined) {
+      newState = newNode.initialState;
+    } else {
+      throw new Error(
+        `Transition returned undefined state and target node has no initialState`,
+      );
+    }
+
+    return {
+      node: newNode,
+      state: newState,
+      children: undefined, // Clear children on transition to new node
+      executorConfig: result.executorConfig ?? newNode.executorConfig,
+      yieldReason: "tool_use", // More work to do on new node
+    };
+  }
+
+  // Should not reach here - exhaustive check
+  throw new Error(`Unknown transition result type`);
+}
