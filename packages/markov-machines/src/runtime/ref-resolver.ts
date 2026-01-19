@@ -4,6 +4,7 @@ import type { AnyToolDefinition, AnthropicBuiltinTool } from "../types/tools.js"
 import type { Transition } from "../types/transitions.js";
 import type { AnyPackToolDefinition } from "../types/pack.js";
 import type { NodeToolEntry } from "../types/node.js";
+import { isRef } from "../types/refs.js";
 
 /**
  * Result of resolving a tool - includes the tool and its owner.
@@ -74,5 +75,29 @@ export function resolveTransition(
   transitionName: string,
 ): Transition<unknown> | undefined {
   return instance.node.transitions[transitionName];
+}
+
+/**
+ * Resolve a transition reference to the actual transition object.
+ * If the transition is already a concrete transition, returns it as-is.
+ * If it's a Ref, looks up the transition in the charter's transitions registry.
+ *
+ * @param charter - The charter containing the transitions registry
+ * @param transition - The transition or ref to resolve
+ * @returns The resolved transition
+ * @throws Error if the ref points to an unknown transition
+ */
+export function resolveTransitionRef<S>(
+  charter: Charter,
+  transition: Transition<S>,
+): Transition<S> {
+  if (isRef(transition)) {
+    const resolved = charter.transitions[transition.ref];
+    if (!resolved) {
+      throw new Error(`Unknown transition ref: ${transition.ref}`);
+    }
+    return resolved as Transition<S>;
+  }
+  return transition;
 }
 

@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { Ref, SerialNode, SerialTransition } from "./refs.js";
 import type { Node } from "./node.js";
+import type { StandardNodeConfig } from "../executor/types.js";
 
 /**
  * Context passed to code transition execute functions.
@@ -19,8 +20,7 @@ export interface SpawnTarget<T = unknown> {
   node: Node<T>;
   state?: T;
   /** Override executor config for this spawned instance */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  executorConfig?: Record<string, any>;
+  executorConfig?: StandardNodeConfig;
 }
 
 /**
@@ -31,8 +31,7 @@ export interface TransitionToResult<T = unknown> {
   node: Node<T>;
   state?: T;
   /** Override executor config for this transition */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  executorConfig?: Record<string, any>;
+  executorConfig?: StandardNodeConfig;
 }
 
 /**
@@ -65,8 +64,7 @@ export type TransitionResult<T = unknown> =
  */
 export interface SpawnOptions {
   /** Override executor config for spawned instance(s) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  executorConfig?: Record<string, any>;
+  executorConfig?: StandardNodeConfig;
 }
 
 /**
@@ -74,8 +72,7 @@ export interface SpawnOptions {
  */
 export interface TransitionToOptions {
   /** Override executor config for the transition target */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  executorConfig?: Record<string, any>;
+  executorConfig?: StandardNodeConfig;
 }
 
 /**

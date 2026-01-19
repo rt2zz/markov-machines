@@ -7,12 +7,13 @@ import {
   isCedeResult,
 } from "../types/transitions.js";
 import { createInstance } from "../types/instance.js";
+import type { StandardNodeConfig } from "../executor/types.js";
 
 export interface TransitionOutcome {
   node: Node<unknown>;
   state: unknown;
   children: Instance | Instance[] | undefined;
-  executorConfig?: Record<string, unknown>;
+  executorConfig?: StandardNodeConfig;
   yieldReason: "tool_use" | "cede";
   cedePayload?: unknown;
 }

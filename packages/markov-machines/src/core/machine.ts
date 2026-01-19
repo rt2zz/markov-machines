@@ -51,12 +51,13 @@ function initializePackStates(charter: Charter): Record<string, unknown> {
  * Initializes pack states on root instance if not present.
  */
 export function createMachine(charter: Charter, config: MachineConfig): Machine {
-  const { instance, history = [] } = config;
+  const { instance: inputInstance, history = [] } = config;
 
-  // Initialize pack states on root instance if not present
-  if (!instance.packStates && charter.packs.length > 0) {
-    instance.packStates = initializePackStates(charter);
-  }
+  // Initialize pack states on root instance if not present (immutably)
+  const instance =
+    !inputInstance.packStates && charter.packs.length > 0
+      ? { ...inputInstance, packStates: initializePackStates(charter) }
+      : inputInstance;
 
   // Validate the entire instance tree
   validateInstance(instance);
