@@ -66,3 +66,36 @@ export function isAnthropicBuiltinTool(tool: unknown): tool is AnthropicBuiltinT
   );
 }
 
+/**
+ * Tool reply that returns separate messages for the user and the LLM.
+ * The user message can be a plain string or a typed message M (which becomes an OutputBlock<M>).
+ */
+export interface ToolReply<M = unknown> {
+  type: "tool_reply";
+  /** Message for the user - string or typed app message */
+  userMessage: string | M;
+  /** Message for the tool result (what the LLM sees) */
+  llmMessage: string;
+}
+
+/**
+ * Type guard for ToolReply.
+ */
+export function isToolReply(value: unknown): value is ToolReply {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    (value as ToolReply).type === "tool_reply"
+  );
+}
+
+/**
+ * Create a tool reply with separate messages for the user and the LLM.
+ * @param userMessage - Message for the user (string or typed app message)
+ * @param llmMessage - Message for the tool result (what the LLM sees)
+ */
+export function toolReply<M = unknown>(userMessage: string | M, llmMessage: string): ToolReply<M> {
+  return { type: "tool_reply", userMessage, llmMessage };
+}
+

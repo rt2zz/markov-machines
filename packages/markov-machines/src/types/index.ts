@@ -9,8 +9,9 @@ export type {
   AnyToolDefinition,
   AnthropicToolDefinition,
   AnthropicBuiltinTool,
+  ToolReply,
 } from "./tools.js";
-export { isAnthropicBuiltinTool } from "./tools.js";
+export { isAnthropicBuiltinTool, isToolReply, toolReply } from "./tools.js";
 
 // Transitions
 export type {

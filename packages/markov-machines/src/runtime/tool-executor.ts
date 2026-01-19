@@ -1,4 +1,5 @@
 import type { AnyToolDefinition, ToolContext } from "../types/tools.js";
+import { isToolReply } from "../types/tools.js";
 
 /**
  * Result of executing a tool.
@@ -6,6 +7,8 @@ import type { AnyToolDefinition, ToolContext } from "../types/tools.js";
 export interface ToolExecutionResult {
   result: string;
   isError: boolean;
+  /** Message for the user - string or typed M (type erased to unknown at runtime) */
+  userMessage?: unknown;
 }
 
 /**
@@ -36,6 +39,15 @@ export async function executeTool<S>(
     // Execute tool
     const output = await tool.execute(inputResult.data, ctx);
 
+    // Handle ToolReply - extract separate user and LLM messages
+    if (isToolReply(output)) {
+      return {
+        result: output.llmMessage,
+        isError: false,
+        userMessage: output.userMessage,
+      };
+    }
+
     // Convert output to string
     const resultStr =
       typeof output === "string" ? output : JSON.stringify(output);
@@ -46,6 +58,3 @@ export async function executeTool<S>(
     return { result: `Tool execution error: ${message}`, isError: true };
   }
 }
-
-// thinking either ctx.reply(contentBlock)
-// or add a new union to ToolExecutionResult, Array<ToolReply,ToolResult> which can be used to split into two categories in the ecxecutor

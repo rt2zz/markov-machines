@@ -74,6 +74,7 @@ export type {
   AnyToolDefinition,
   AnthropicToolDefinition,
   AnthropicBuiltinTool,
+  ToolReply,
   // Messages
   Message,
   ContentBlock,
@@ -126,6 +127,8 @@ export {
   isPack,
   isPackToolDefinition,
   isAnthropicBuiltinTool,
+  isToolReply,
+  toolReply,
   isValueResult,
   commandValue,
   isCommand,

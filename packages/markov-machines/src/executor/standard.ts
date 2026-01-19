@@ -402,13 +402,21 @@ export class StandardExecutor implements Executor<unknown> {
             };
           }
 
-          const { result: toolResultStr, isError } = await executeTool(
+          const { result: toolResultStr, isError, userMessage } = await executeTool(
             tool,
             toolInput,
             toolState,
             onUpdate,
           );
           toolResults.push(toolResult(id, toolResultStr, isError));
+          // Add user message block if present (from toolReply)
+          if (userMessage !== undefined) {
+            if (typeof userMessage === "string") {
+              toolResults.push({ type: "text", text: userMessage });
+            } else {
+              toolResults.push({ type: "output", data: userMessage });
+            }
+          }
           continue;
         }
 
