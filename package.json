@@ -2,7 +2,13 @@
   "name": "machines",
   "type": "module",
   "private": true,
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "claude": "claude --plugin-dir ./.claude/plugins/jj"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
