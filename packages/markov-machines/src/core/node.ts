@@ -2,8 +2,8 @@ import { v4 as uuid } from "uuid";
 import type {
   Node,
   NodeConfig,
-  PassiveNode,
-  PassiveNodeConfig,
+  WorkerNode,
+  WorkerNodeConfig,
   OutputConfig,
 } from "../types/node.js";
 
@@ -85,34 +85,34 @@ export function createNode<S, M = never>(config: NodeConfig<S, M>): Node<S, M> {
 }
 
 /**
- * Create a new passive node instance.
- * Passive nodes execute in parallel with the main flow but:
+ * Create a new worker node instance.
+ * Worker nodes execute in parallel with the main flow but:
  * - Don't receive user input
  * - Can't access packs
  * - Must cede to return control (end_turn throws an error)
  *
  * @typeParam S - The node's state type.
  */
-export function createPassiveNode<S>(config: PassiveNodeConfig<S>): PassiveNode<S, never>;
+export function createWorkerNode<S>(config: WorkerNodeConfig<S>): WorkerNode<S, never>;
 
 /**
- * Create a new passive node instance with structured output.
+ * Create a new worker node instance with structured output.
  * @typeParam S - The node's state type.
  * @typeParam M - The output message type.
  */
-export function createPassiveNode<S, M>(
-  config: PassiveNodeConfig<S, M> & { output: OutputConfig<M> },
-): PassiveNode<S, M>;
+export function createWorkerNode<S, M>(
+  config: WorkerNodeConfig<S, M> & { output: OutputConfig<M> },
+): WorkerNode<S, M>;
 
 /**
- * Create a new passive node instance.
+ * Create a new worker node instance.
  *
  * @typeParam S - The node's state type.
  * @typeParam M - The output message type (never = no structured output).
  */
-export function createPassiveNode<S, M = never>(
-  config: PassiveNodeConfig<S, M>,
-): PassiveNode<S, M> {
+export function createWorkerNode<S, M = never>(
+  config: WorkerNodeConfig<S, M>,
+): WorkerNode<S, M> {
   const {
     instructions,
     tools = {},
@@ -136,6 +136,6 @@ export function createPassiveNode<S, M = never>(
     initialState,
     executorConfig,
     output,
-    passive: true,
+    worker: true,
   };
 }

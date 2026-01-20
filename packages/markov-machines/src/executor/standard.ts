@@ -66,7 +66,7 @@ export class StandardExecutor implements Executor<unknown> {
     let currentChildren = instance.children;
     let currentExecutorConfig = instance.executorConfig;
     const newMessages: Message[] = [];
-    const isPassive = instance.node.passive === true;
+    const isWorker = instance.node.worker === true;
 
     // Get pack states from root instance (first ancestor or current instance)
     const rootInstance = ancestors[0] ?? instance;
@@ -293,8 +293,8 @@ export class StandardExecutor implements Executor<unknown> {
       messages: newMessages,
       yieldReason,
       cedeContent,
-      // Passive instances don't update pack states
-      packStates: !isPassive && Object.keys(packStates).length > 0 ? packStates : undefined,
+      // Worker instances don't update pack states
+      packStates: !isWorker && Object.keys(packStates).length > 0 ? packStates : undefined,
     };
   }
 

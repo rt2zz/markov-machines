@@ -4,7 +4,7 @@ import type { Instance, ActiveLeafInfo } from "../types/instance.js";
 import type { Command, Resume } from "../types/commands.js";
 import type { Message } from "../types/messages.js";
 import type { YieldReason } from "../executor/types.js";
-import { getInstancePath, getActiveLeaves, isPassiveInstance, getSuspendedInstances, findInstanceById, clearSuspension } from "../types/instance.js";
+import { getActiveLeaves, isWorkerInstance, getSuspendedInstances, findInstanceById, clearSuspension } from "../types/instance.js";
 import { userMessage } from "../types/messages.js";
 import { isCommand, isResume } from "../types/commands.js";
 import { runCommand } from "./commands.js";
@@ -20,8 +20,8 @@ const hasPackStates = (ps?: Record<string, unknown>): boolean =>
   ps !== undefined && Object.keys(ps).length > 0;
 
 /**
- * Rebuild the tree by replacing the active instance.
- * Follows the same path that getInstancePath would follow.
+ * Rebuild the tree by replacing the updated leaf instance.
+ * Used after single-leaf execution to propagate changes up the ancestor chain.
  */
 function rebuildTree(
   updatedActive: Instance,
@@ -115,8 +115,8 @@ function rebuildTreeAfterCede(
 interface LeafResult<AppMessage = unknown> {
   /** Index path to this leaf in the tree */
   leafIndex: number[];
-  /** Whether this is a passive instance */
-  isPassive: boolean;
+  /** Whether this is a worker instance */
+  isWorker: boolean;
   /** Instance ID for attribution */
   instanceId: string;
   /** Updated instance from executor */
@@ -125,7 +125,7 @@ interface LeafResult<AppMessage = unknown> {
   messages: Message<AppMessage>[];
   /** Why this leaf yielded */
   yieldReason: YieldReason;
-  /** Updated pack states (only from non-passive) */
+  /** Updated pack states (only from non-worker) */
   packStates?: Record<string, unknown>;
   /** Cede content if yielded via cede (string or Message[]) */
   cedeContent?: string | Message<AppMessage>[];
@@ -261,23 +261,23 @@ function mergeLeafResults<AppMessage>(
   });
 
   for (const leaf of sorted) {
-    const { leafIndex, isPassive, instanceId, messages, yieldReason, packStates, cedeContent } = leaf;
+    const { leafIndex, isWorker, instanceId, messages, yieldReason, packStates, cedeContent } = leaf;
 
-    // Only non-passive can update pack states
-    // Note: Only one non-passive leaf can exist at a time (validated at lines 439-445),
+    // Only non-worker can update pack states
+    // Note: Only one non-worker leaf can exist at a time (validated at lines 439-445),
     // so pack state conflicts between leaves cannot occur. This assignment is safe.
-    if (!isPassive && packStates) {
+    if (!isWorker && packStates) {
       Object.assign(packStateUpdates, packStates);
     }
 
-    // Passive end_turn without cede -> warning (but don't propagate as machine end_turn)
-    if (isPassive && yieldReason === "end_turn") {
+    // Worker end_turn without cede -> warning (but don't propagate as machine end_turn)
+    if (isWorker && yieldReason === "end_turn") {
       console.warn(
-        `[runMachine] Passive instance ${instanceId} returned end_turn without ceding. ` +
-        `This is unexpected - passive nodes should cede to return control to parent. ` +
-        `Treating as if passive work is complete (not propagating end_turn to machine).`
+        `[runMachine] Worker instance ${instanceId} returned end_turn without ceding. ` +
+        `This is unexpected - worker nodes should cede to return control to parent. ` +
+        `Treating as if worker work is complete (not propagating end_turn to machine).`
       );
-      // Continue processing - don't let passive end_turn affect machine state
+      // Continue processing - don't let worker end_turn affect machine state
       continue;
     }
 
@@ -419,43 +419,43 @@ export async function* runMachine<AppMessage = unknown>(
       throw new Error("No active instances found");
     }
 
-    // Validate: max 1 non-passive leaf
-    const nonPassiveLeaves = activeLeaves.filter(l => !l.isPassive);
-    if (nonPassiveLeaves.length > 1) {
+    // Validate: max 1 non-worker leaf
+    const nonWorkerLeaves = activeLeaves.filter(l => !l.isWorker);
+    if (nonWorkerLeaves.length > 1) {
       throw new Error(
-        `Invalid state: ${nonPassiveLeaves.length} non-passive active leaves. ` +
+        `Invalid state: ${nonWorkerLeaves.length} non-worker active leaves. ` +
         `At most one instance can receive user input per step.`
       );
     }
 
     if (options?.debug) {
       console.log(`[runMachine] Step ${steps}/${maxSteps}`);
-      console.log(`[runMachine]   Active leaves: ${activeLeaves.length} (${nonPassiveLeaves.length} non-passive)`);
+      console.log(`[runMachine]   Active leaves: ${activeLeaves.length} (${nonWorkerLeaves.length} non-worker)`);
     }
 
     // Execute all leaves in parallel
     const results = await Promise.all(
-      activeLeaves.map(async ({ path, leafIndex, isPassive }) => {
+      activeLeaves.map(async ({ path, leafIndex, isWorker }) => {
         const leaf = path[path.length - 1]!;
         const ancestors = path.slice(0, -1);
 
         if (options?.debug) {
           const instructions = leaf.node.instructions;
-          console.log(`[runMachine]   Leaf ${leafIndex.join('.')}: ${instructions.slice(0, 40)}... (passive: ${isPassive})`);
+          console.log(`[runMachine]   Leaf ${leafIndex.join('.')}: ${instructions.slice(0, 40)}... (worker: ${isWorker})`);
         }
 
         const result = await machine.charter.executor.run(
           machine.charter,
           leaf,
           ancestors,
-          isPassive ? "" : currentInput, // Passive nodes don't receive user input
+          isWorker ? "" : currentInput, // Worker nodes don't receive user input
           { ...options, history: currentHistory, currentStep: steps, maxSteps },
         );
 
         // Flatten RunResult into LeafResult
         return {
           leafIndex,
-          isPassive,
+          isWorker,
           instanceId: leaf.id,
           ...result,
         } as LeafResult<AppMessage>;

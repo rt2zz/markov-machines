@@ -28,7 +28,7 @@ type ToolSource =
  * Generate Anthropic tool definitions for a node.
  * Includes: updateState, transition tools, current node tools, ancestor tools, and charter tools.
  * Child tools shadow parent tools (closest match wins).
- * Pack tools are only included for non-passive nodes.
+ * Pack tools are only included for non-worker nodes.
  *
  * @throws Error if a tool name from a lower-priority scope conflicts with a higher-priority scope
  */
@@ -214,9 +214,9 @@ export function generateToolDefinitions<S>(
     toolSources.set(name, "charter");
   }
 
-  // 6. Add pack tools (lowest priority - only for packs on current node, and only for non-passive nodes)
-  // Passive nodes don't have access to packs
-  if (!node.passive) {
+  // 6. Add pack tools (lowest priority - only for packs on current node, and only for non-worker nodes)
+  // Worker nodes don't have access to packs
+  if (!node.worker) {
     const standardNode = node as Node<S>;
     for (const pack of standardNode.packs ?? []) {
       for (const [name, tool] of Object.entries(pack.tools)) {

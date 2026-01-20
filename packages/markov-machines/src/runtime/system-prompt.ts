@@ -11,7 +11,7 @@ export interface SystemPromptOptions {
  * Build the complete system prompt for a node execution.
  * Includes node instructions, current state, available transitions,
  * ancestor context, pack states, and step warnings.
- * For passive nodes, pack context is omitted.
+ * For worker nodes, pack context is omitted.
  */
 export function buildSystemPrompt<S>(
   node: Node<S>,
@@ -31,9 +31,9 @@ ${buildTransitionsSection(node.transitions)}`;
     prompt += `\n\n${buildAncestorContext(ancestors)}`;
   }
 
-  // Add active packs section (only for non-passive nodes)
-  // Passive nodes don't have packs and shouldn't see pack context
-  if (!node.passive) {
+  // Add active packs section (only for non-worker nodes)
+  // Worker nodes don't have packs and shouldn't see pack context
+  if (!node.worker) {
     const packsSection = buildPacksSection(node as Node<S>, packStates);
     if (packsSection) {
       prompt += `\n\n${packsSection}`;

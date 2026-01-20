@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import { createCharter } from "../core/charter.js";
-import { createNode, createPassiveNode } from "../core/node.js";
+import { createNode, createWorkerNode } from "../core/node.js";
 import {
   createInstance,
   getActiveLeaves,
-  isPassiveInstance,
+  isWorkerInstance,
 } from "../types/instance.js";
 import { createMachine } from "../core/machine.js";
 import { runMachine, runMachineToCompletion } from "../core/run.js";
@@ -76,14 +76,14 @@ const standardStateValidator = z.object({
 });
 type StandardState = z.infer<typeof standardStateValidator>;
 
-const passiveStateValidator = z.object({
+const workerStateValidator = z.object({
   task: z.string(),
   result: z.string().optional(),
 });
-type PassiveState = z.infer<typeof passiveStateValidator>;
+type WorkerState = z.infer<typeof workerStateValidator>;
 
-describe("passive node types", () => {
-  it("should correctly identify passive nodes", () => {
+describe("worker node types", () => {
+  it("should correctly identify worker nodes", () => {
     // Create a standard node
     const standardNode = createNode<StandardState>({
       instructions: "Standard node",
@@ -91,35 +91,35 @@ describe("passive node types", () => {
       initialState: { value: "standard" },
     });
 
-    // Create a passive node
-    const passiveNode = createPassiveNode<PassiveState>({
-      instructions: "Passive node",
-      validator: passiveStateValidator,
+    // Create a worker node
+    const workerNode = createWorkerNode<WorkerState>({
+      instructions: "Worker node",
+      validator: workerStateValidator,
       initialState: { task: "background", result: undefined },
     });
 
-    expect(standardNode.passive).not.toBe(true);
-    expect(passiveNode.passive).toBe(true);
+    expect(standardNode.worker).not.toBe(true);
+    expect(workerNode.worker).toBe(true);
   });
 
-  it("should correctly identify passive instances", () => {
+  it("should correctly identify worker instances", () => {
     const standardNode = createNode<StandardState>({
       instructions: "Standard node",
       validator: standardStateValidator,
       initialState: { value: "standard" },
     });
 
-    const passiveNode = createPassiveNode<PassiveState>({
-      instructions: "Passive node",
-      validator: passiveStateValidator,
+    const workerNode = createWorkerNode<WorkerState>({
+      instructions: "Worker node",
+      validator: workerStateValidator,
       initialState: { task: "background", result: undefined },
     });
 
     const standardInstance = createInstance(standardNode, { value: "test" });
-    const passiveInstance = createInstance(passiveNode, { task: "bg", result: undefined });
+    const workerInstance = createInstance(workerNode, { task: "bg", result: undefined });
 
-    expect(isPassiveInstance(standardInstance)).toBe(false);
-    expect(isPassiveInstance(passiveInstance)).toBe(true);
+    expect(isWorkerInstance(standardInstance)).toBe(false);
+    expect(isWorkerInstance(workerInstance)).toBe(true);
   });
 });
 
@@ -136,7 +136,7 @@ describe("getActiveLeaves", () => {
 
     expect(leaves.length).toBe(1);
     expect(leaves[0]?.leafIndex).toEqual([]);
-    expect(leaves[0]?.isPassive).toBe(false);
+    expect(leaves[0]?.isWorker).toBe(false);
   });
 
   it("should return single leaf for parent-child tree", () => {
@@ -177,13 +177,13 @@ describe("getActiveLeaves", () => {
       initialState: { value: "child" },
     });
 
-    const passiveChildNode = createPassiveNode<PassiveState>({
-      instructions: "Passive child",
-      validator: passiveStateValidator,
+    const workerChildNode = createWorkerNode<WorkerState>({
+      instructions: "Worker child",
+      validator: workerStateValidator,
       initialState: { task: "bg", result: undefined },
     });
 
-    const child1 = createInstance(passiveChildNode, { task: "bg1", result: undefined });
+    const child1 = createInstance(workerChildNode, { task: "bg1", result: undefined });
     const child2 = createInstance(childNode, { value: "main" });
 
     const parent = createInstance(parentNode, { value: "parent" }, [child1, child2]);
@@ -192,13 +192,13 @@ describe("getActiveLeaves", () => {
 
     expect(leaves.length).toBe(2);
 
-    // First leaf (passive)
+    // First leaf (worker)
     expect(leaves[0]?.leafIndex).toEqual([0]);
-    expect(leaves[0]?.isPassive).toBe(true);
+    expect(leaves[0]?.isWorker).toBe(true);
 
-    // Second leaf (non-passive)
+    // Second leaf (non-worker)
     expect(leaves[1]?.leafIndex).toEqual([1]);
-    expect(leaves[1]?.isPassive).toBe(false);
+    expect(leaves[1]?.isWorker).toBe(false);
   });
 
   it("should return correct indices for deeply nested tree", () => {
@@ -223,7 +223,7 @@ describe("getActiveLeaves", () => {
 });
 
 describe("parallel execution validation", () => {
-  it("should throw error when multiple non-passive leaves exist", async () => {
+  it("should throw error when multiple non-worker leaves exist", async () => {
     const nodeA = createNode<StandardState>({
       instructions: "Node A",
       validator: standardStateValidator,
@@ -246,7 +246,7 @@ describe("parallel execution validation", () => {
       nodes: { nodeA, nodeB },
     });
 
-    // Create tree with two non-passive children
+    // Create tree with two non-worker children
     const childA = createInstance(nodeA, { value: "a" });
     const childB = createInstance(nodeB, { value: "b" });
     const root = createInstance(nodeA, { value: "root" }, [childA, childB]);
@@ -254,20 +254,20 @@ describe("parallel execution validation", () => {
     const machine = createMachine(charter, { instance: root });
 
     await expect(runMachineToCompletion(machine, "test")).rejects.toThrow(
-      /Invalid state: 2 non-passive active leaves/
+      /Invalid state: 2 non-worker active leaves/
     );
   });
 
-  it("should allow one non-passive and one passive leaf", async () => {
+  it("should allow one non-worker and one worker leaf", async () => {
     const standardNode = createNode<StandardState>({
       instructions: "Standard",
       validator: standardStateValidator,
       initialState: { value: "main" },
     });
 
-    const passiveNode = createPassiveNode<PassiveState>({
-      instructions: "Passive",
-      validator: passiveStateValidator,
+    const workerNode = createWorkerNode<WorkerState>({
+      instructions: "Worker",
+      validator: workerStateValidator,
       initialState: { task: "bg", result: undefined },
     });
 
@@ -275,8 +275,8 @@ describe("parallel execution validation", () => {
     const { executor, getCalls } = createTrackingMockExecutor(
       (_charter, instance, _ancestors, _input) => {
         callCount++;
-        // Passive node cedes, standard node ends turn
-        if (instance.node.passive) {
+        // Worker node cedes, standard node ends turn
+        if (instance.node.worker) {
           return {
             yieldReason: "cede",
             cedePayload: { done: true },
@@ -292,13 +292,13 @@ describe("parallel execution validation", () => {
     const charter = createCharter({
       name: "test",
       executor,
-      nodes: { standardNode, passiveNode },
+      nodes: { standardNode, workerNode },
     });
 
-    // One passive, one standard child
-    const passiveChild = createInstance(passiveNode, { task: "bg", result: undefined });
+    // One worker, one standard child
+    const workerChild = createInstance(workerNode, { task: "bg", result: undefined });
     const standardChild = createInstance(standardNode, { value: "main" });
-    const root = createInstance(standardNode, { value: "root" }, [passiveChild, standardChild]);
+    const root = createInstance(standardNode, { value: "root" }, [workerChild, standardChild]);
 
     const machine = createMachine(charter, { instance: root });
     const result = await runMachineToCompletion(machine, "test");
@@ -306,18 +306,18 @@ describe("parallel execution validation", () => {
     // Both should have been called in parallel
     expect(callCount).toBe(2);
 
-    // Verify passive node received empty input
+    // Verify worker node received empty input
     const calls = getCalls();
-    const passiveCall = calls.find((c) => c.instance.node.passive);
-    expect(passiveCall?.input).toBe("");
+    const workerCall = calls.find((c) => c.instance.node.worker);
+    expect(workerCall?.input).toBe("");
 
-    const nonPassiveCall = calls.find((c) => !c.instance.node.passive);
-    expect(nonPassiveCall?.input).toBe("test");
+    const nonWorkerCall = calls.find((c) => !c.instance.node.worker);
+    expect(nonWorkerCall?.input).toBe("test");
   });
 });
 
-describe("passive node must cede", () => {
-  it("should warn when passive node returns end_turn without ceding", async () => {
+describe("worker node must cede", () => {
+  it("should warn when worker node returns end_turn without ceding", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const standardNode = createNode<StandardState>({
@@ -326,14 +326,14 @@ describe("passive node must cede", () => {
       initialState: { value: "main" },
     });
 
-    const passiveNode = createPassiveNode<PassiveState>({
-      instructions: "Passive",
-      validator: passiveStateValidator,
+    const workerNode = createWorkerNode<WorkerState>({
+      instructions: "Worker",
+      validator: workerStateValidator,
       initialState: { task: "bg", result: undefined },
     });
 
     const { executor } = createTrackingMockExecutor(() => ({
-      // Both nodes return end_turn (passive should have ceded)
+      // Both nodes return end_turn (worker should have ceded)
       yieldReason: "end_turn",
       messages: [{ role: "assistant" as const, content: "Done!" }],
     }));
@@ -341,39 +341,39 @@ describe("passive node must cede", () => {
     const charter = createCharter({
       name: "test",
       executor,
-      nodes: { standardNode, passiveNode },
+      nodes: { standardNode, workerNode },
     });
 
-    const passiveChild = createInstance(passiveNode, { task: "bg", result: undefined });
+    const workerChild = createInstance(workerNode, { task: "bg", result: undefined });
     const standardChild = createInstance(standardNode, { value: "main" });
-    const root = createInstance(standardNode, { value: "root" }, [passiveChild, standardChild]);
+    const root = createInstance(standardNode, { value: "root" }, [workerChild, standardChild]);
 
     const machine = createMachine(charter, { instance: root });
 
-    // Should complete without throwing (passive end_turn is ignored with warning)
+    // Should complete without throwing (worker end_turn is ignored with warning)
     const result = await runMachineToCompletion(machine, "test");
 
     // Verify warning was logged
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/Passive instance .* returned end_turn without ceding/)
+      expect.stringMatching(/Worker instance .* returned end_turn without ceding/)
     );
 
-    // Machine should still complete (non-passive leaf's end_turn is respected)
+    // Machine should still complete (non-worker leaf's end_turn is respected)
     expect(result.done).toBe(true);
 
     warnSpy.mockRestore();
   });
 
-  it("should allow passive node to use tool_use (not end_turn)", async () => {
+  it("should allow worker node to use tool_use (not end_turn)", async () => {
     const standardNode = createNode<StandardState>({
       instructions: "Standard",
       validator: standardStateValidator,
       initialState: { value: "main" },
     });
 
-    const passiveNode = createPassiveNode<PassiveState>({
-      instructions: "Passive",
-      validator: passiveStateValidator,
+    const workerNode = createWorkerNode<WorkerState>({
+      instructions: "Worker",
+      validator: workerStateValidator,
       initialState: { task: "bg", result: undefined },
     });
 
@@ -381,15 +381,15 @@ describe("passive node must cede", () => {
     const { executor } = createTrackingMockExecutor(
       (_charter, instance, _ancestors, _input) => {
         step++;
-        if (instance.node.passive) {
+        if (instance.node.worker) {
           if (step === 1) {
-            // First step: passive uses tool
+            // First step: worker uses tool
             return {
               yieldReason: "tool_use",
               messages: [],
             };
           }
-          // Second step: passive cedes
+          // Second step: worker cedes
           return {
             yieldReason: "cede",
             cedePayload: { done: true },
@@ -412,12 +412,12 @@ describe("passive node must cede", () => {
     const charter = createCharter({
       name: "test",
       executor,
-      nodes: { standardNode, passiveNode },
+      nodes: { standardNode, workerNode },
     });
 
-    const passiveChild = createInstance(passiveNode, { task: "bg", result: undefined });
+    const workerChild = createInstance(workerNode, { task: "bg", result: undefined });
     const standardChild = createInstance(standardNode, { value: "main" });
-    const root = createInstance(standardNode, { value: "root" }, [passiveChild, standardChild]);
+    const root = createInstance(standardNode, { value: "root" }, [workerChild, standardChild]);
 
     const machine = createMachine(charter, { instance: root });
     const result = await runMachineToCompletion(machine, "test");
@@ -427,22 +427,22 @@ describe("passive node must cede", () => {
 });
 
 describe("parallel execution cede handling", () => {
-  it("should remove passive leaf when it cedes", async () => {
+  it("should remove worker leaf when it cedes", async () => {
     const standardNode = createNode<StandardState>({
       instructions: "Standard",
       validator: standardStateValidator,
       initialState: { value: "main" },
     });
 
-    const passiveNode = createPassiveNode<PassiveState>({
-      instructions: "Passive",
-      validator: passiveStateValidator,
+    const workerNode = createWorkerNode<WorkerState>({
+      instructions: "Worker",
+      validator: workerStateValidator,
       initialState: { task: "bg", result: undefined },
     });
 
     const { executor } = createTrackingMockExecutor(
       (_charter, instance, _ancestors, _input) => {
-        if (instance.node.passive) {
+        if (instance.node.worker) {
           return {
             yieldReason: "cede",
             cedePayload: { result: "background done" },
@@ -458,23 +458,23 @@ describe("parallel execution cede handling", () => {
     const charter = createCharter({
       name: "test",
       executor,
-      nodes: { standardNode, passiveNode },
+      nodes: { standardNode, workerNode },
     });
 
-    const passiveChild = createInstance(passiveNode, { task: "bg", result: undefined });
+    const workerChild = createInstance(workerNode, { task: "bg", result: undefined });
     const standardChild = createInstance(standardNode, { value: "main" });
-    const root = createInstance(standardNode, { value: "root" }, [passiveChild, standardChild]);
+    const root = createInstance(standardNode, { value: "root" }, [workerChild, standardChild]);
 
     const machine = createMachine(charter, { instance: root });
     const result = await runMachineToCompletion(machine, "test");
 
-    // After parallel execution, passive child should be removed
+    // After parallel execution, worker child should be removed
     expect(result.instance.children).toBeDefined();
     expect(result.instance.children?.length).toBe(1);
 
     // Should only have the standard child left
     const child = result.instance.children![0]!;
-    expect(child.node.passive).not.toBe(true);
+    expect(child.node.worker).not.toBe(true);
   });
 });
 
@@ -486,19 +486,19 @@ describe("message attribution", () => {
       initialState: { value: "main" },
     });
 
-    const passiveNode = createPassiveNode<PassiveState>({
-      instructions: "Passive",
-      validator: passiveStateValidator,
+    const workerNode = createWorkerNode<WorkerState>({
+      instructions: "Worker",
+      validator: workerStateValidator,
       initialState: { task: "bg", result: undefined },
     });
 
     const { executor } = createTrackingMockExecutor(
       (_charter, instance, _ancestors, _input) => {
-        if (instance.node.passive) {
+        if (instance.node.worker) {
           return {
             yieldReason: "cede",
             cedePayload: { result: "background done" },
-            messages: [{ role: "assistant" as const, content: "Passive message" }],
+            messages: [{ role: "assistant" as const, content: "Worker message" }],
           };
         }
         return {
@@ -511,12 +511,12 @@ describe("message attribution", () => {
     const charter = createCharter({
       name: "test",
       executor,
-      nodes: { standardNode, passiveNode },
+      nodes: { standardNode, workerNode },
     });
 
-    const passiveChild = createInstance(passiveNode, { task: "bg", result: undefined });
+    const workerChild = createInstance(workerNode, { task: "bg", result: undefined });
     const standardChild = createInstance(standardNode, { value: "main" });
-    const root = createInstance(standardNode, { value: "root" }, [passiveChild, standardChild]);
+    const root = createInstance(standardNode, { value: "root" }, [workerChild, standardChild]);
 
     const machine = createMachine(charter, { instance: root });
     const steps = await collectSteps(runMachine(machine, "test"));

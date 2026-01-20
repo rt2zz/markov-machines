@@ -15,7 +15,7 @@ A small framework for building stateful, multi-node agent workflows. It models a
 
 Transitions can:
 - transition: replace the current node with another.
-- spawn: add child node instances; the active instance is the last child.
+- spawn: add child node instances; all leaves execute in parallel.
 - cede: remove the current instance and return control to the parent.
 
 ## Packs
@@ -71,7 +71,7 @@ Public APIs are exported from `packages/markov-machines/index.ts` including:
 
 ## Decisions to Revisit
 
-- Sending user input to passive nodes, and otherwise controlling the message history passive nodes have access to
-- Should passive nodes be allowed to end_turn? What controls do we need to encourage them to conclude their work correctly? Auto-cede?
+- Sending user input to worker nodes, and otherwise controlling the message history worker nodes have access to
+- Should worker nodes be allowed to end_turn? What controls do we need to encourage them to conclude their work correctly? Auto-cede?
 - Allowing packs to be provided at any level of the instance tree (maybe packBoundary option?)
 - Allowing non-current node tools to operate on their respective tool owner's state. Or is this an anti-pattern and should rely on packs instead of inherited tools?
