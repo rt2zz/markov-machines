@@ -67,6 +67,8 @@ export {
   getActiveLeaves,
   getSuspendedInstances,
   findInstanceById,
+  createSuspendInfo,
+  clearSuspension,
 } from "./instance.js";
 
 // Charter

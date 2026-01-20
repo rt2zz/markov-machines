@@ -15,7 +15,7 @@ import {
 } from "../types/transitions.js";
 import { cede, spawn, suspend } from "../helpers/cede-spawn.js";
 import { deepMerge } from "../types/state.js";
-import { createInstance } from "../types/instance.js";
+import { createInstance, createSuspendInfo, clearSuspension } from "../types/instance.js";
 
 /**
  * Execute a command on an instance.
@@ -132,12 +132,7 @@ export async function executeCommand(
 
     // Handle suspend result
     if (isSuspendResult(cmdResult)) {
-      const suspendInfo: SuspendInfo = {
-        suspendId: cmdResult.suspendId,
-        reason: cmdResult.reason,
-        suspendedAt: new Date(),
-        metadata: cmdResult.metadata,
-      };
+      const suspendInfo = createSuspendInfo(cmdResult);
       const updatedInstance: Instance = {
         ...instance,
         state: currentState,
@@ -153,10 +148,8 @@ export async function executeCommand(
 
     // Handle resume result
     if (isResumeResult(cmdResult)) {
-      // Clear the suspended field
-      const { suspended: _, ...rest } = instance;
       const updatedInstance: Instance = {
-        ...rest,
+        ...clearSuspension(instance),
         state: currentState,
       };
       return {

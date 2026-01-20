@@ -8,7 +8,7 @@ import {
   isCedeResult,
   isSuspendResult,
 } from "../types/transitions.js";
-import { createInstance } from "../types/instance.js";
+import { createInstance, createSuspendInfo } from "../types/instance.js";
 import type { StandardNodeConfig } from "../executor/types.js";
 
 export interface TransitionOutcome {
@@ -52,12 +52,7 @@ export function handleTransitionResult(
       state: currentState,
       children: currentChildren,
       yieldReason: "suspend",
-      suspendInfo: {
-        suspendId: result.suspendId,
-        reason: result.reason,
-        suspendedAt: new Date(),
-        metadata: result.metadata,
-      },
+      suspendInfo: createSuspendInfo(result),
     };
   }
 

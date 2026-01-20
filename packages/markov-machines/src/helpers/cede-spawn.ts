@@ -8,6 +8,7 @@ import type {
   SuspendResult,
 } from "../types/transitions.js";
 import type { Message } from "../types/messages.js";
+import type { SuspendOptions } from "../types/commands.js";
 
 /**
  * Cede control back to parent with optional content.
@@ -87,16 +88,6 @@ export function spawn<T = unknown>(
 }
 
 /**
- * Options for suspend helper.
- */
-export interface SuspendHelperOptions {
-  /** Custom suspend ID (auto-generated if not provided) */
-  suspendId?: string;
-  /** Optional metadata for application use */
-  metadata?: Record<string, unknown>;
-}
-
-/**
  * Suspend the current instance.
  * The instance remains in the tree but is excluded from getActiveLeaves().
  * Can be resumed via Resume input or a command that returns ResumeResult.
@@ -125,7 +116,7 @@ export interface SuspendHelperOptions {
  */
 export function suspend(
   reason: string,
-  options?: SuspendHelperOptions,
+  options?: SuspendOptions,
 ): SuspendResult {
   return {
     type: "suspend",
