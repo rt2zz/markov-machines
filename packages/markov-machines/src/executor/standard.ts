@@ -198,8 +198,9 @@ export class StandardExecutor implements Executor<unknown> {
     newMessages.push(assistantMsg);
 
     // Determine yield reason and process accordingly
-    let yieldReason: "end_turn" | "tool_use" | "max_tokens" | "cede" = "end_turn";
+    let yieldReason: "end_turn" | "tool_use" | "max_tokens" | "cede" | "suspend" = "end_turn";
     let cedeContent: string | Message<unknown>[] | undefined = undefined;
+    let suspendInfo: import("../types/instance.js").SuspendInfo | undefined = undefined;
 
     if (response.stop_reason === "max_tokens") {
       yieldReason = "max_tokens";
@@ -264,6 +265,7 @@ export class StandardExecutor implements Executor<unknown> {
         currentChildren = outcome.children;
         yieldReason = outcome.yieldReason;
         cedeContent = outcome.cedeContent;
+        suspendInfo = outcome.suspendInfo;
         if (outcome.executorConfig !== undefined) {
           currentExecutorConfig = outcome.executorConfig;
         }
@@ -283,6 +285,7 @@ export class StandardExecutor implements Executor<unknown> {
       ancestors,
       packStates,
       currentExecutorConfig,
+      suspendInfo,
     );
 
     return {
@@ -306,6 +309,7 @@ export class StandardExecutor implements Executor<unknown> {
     ancestors: Instance[],
     packStates: Record<string, unknown>,
     executorConfig?: StandardNodeConfig,
+    suspendInfo?: import("../types/instance.js").SuspendInfo,
   ): Instance {
     // Build the updated leaf instance
     // Include packStates only if this is the root instance (no ancestors)
@@ -317,6 +321,7 @@ export class StandardExecutor implements Executor<unknown> {
       child: currentChildren,
       ...(isRoot && Object.keys(packStates).length > 0 ? { packStates } : {}),
       executorConfig,
+      ...(suspendInfo ? { suspended: suspendInfo } : {}),
     };
   }
 

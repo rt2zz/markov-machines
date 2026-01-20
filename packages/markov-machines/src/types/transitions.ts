@@ -57,12 +57,27 @@ export interface CedeResult<M = unknown> {
 }
 
 /**
+ * Suspend - pause execution while remaining in the tree.
+ * Suspended instances are excluded from getActiveLeaves() but can still receive commands.
+ */
+export interface SuspendResult {
+  type: "suspend";
+  /** Unique ID for this suspension - must match to resume */
+  suspendId: string;
+  /** Human-readable reason for suspension */
+  reason: string;
+  /** Optional metadata for application use */
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * Union of all transition results.
  */
 export type TransitionResult<T = unknown> =
   | TransitionToResult<T>
   | SpawnResult<T>
-  | CedeResult;
+  | CedeResult
+  | SuspendResult;
 
 /**
  * Options for spawn helper.
@@ -171,6 +186,18 @@ export function isCedeResult(value: unknown): value is CedeResult {
     value !== null &&
     "type" in value &&
     (value as CedeResult).type === "cede"
+  );
+}
+
+/**
+ * Type guard for SuspendResult
+ */
+export function isSuspendResult(value: unknown): value is SuspendResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    (value as SuspendResult).type === "suspend"
   );
 }
 

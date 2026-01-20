@@ -7,9 +7,10 @@ import type {
   CommandContext,
   CommandResult,
 } from "../types/commands.js";
-import { getActiveInstance } from "../types/instance.js";
+import { getActiveInstance, findInstanceById } from "../types/instance.js";
 import { executeCommand as executeCommandOnInstance } from "../runtime/command-executor.js";
-import { isCedeResult } from "../types/transitions.js";
+import { isCedeResult, isSuspendResult } from "../types/transitions.js";
+import { isResumeResult } from "../types/commands.js";
 
 /**
  * Get available commands on the current active instance.
@@ -26,26 +27,42 @@ export function getAvailableCommands(machine: Machine): CommandInfo[] {
 }
 
 /**
- * Execute a command on the current active instance.
+ * Execute a command on an instance.
+ * If instanceId is provided, targets that specific instance (can be suspended).
+ * Otherwise, targets the current active instance.
  * Returns the updated machine and the command result.
  */
 export async function runCommand(
   machine: Machine,
   commandName: string,
   input: unknown = {},
+  instanceId?: string,
 ): Promise<{ machine: Machine; result: CommandExecutionResult }> {
-  const active = getActiveInstance(machine.instance);
+  // Find the target instance
+  let target: Instance;
+  if (instanceId) {
+    const found = findInstanceById(machine.instance, instanceId);
+    if (!found) {
+      return {
+        machine,
+        result: { success: false, error: `Instance not found: ${instanceId}` },
+      };
+    }
+    target = found;
+  } else {
+    target = getActiveInstance(machine.instance);
+  }
 
   const { result, instance: updatedInstance, transitionResult } =
-    await executeCommandOnInstance(active, commandName, input);
+    await executeCommandOnInstance(target, commandName, input);
 
   if (!result.success) {
     return { machine, result };
   }
 
-  // Handle cede - need to remove the active instance from the tree
+  // Handle cede - need to remove the target instance from the tree
   if (transitionResult && isCedeResult(transitionResult)) {
-    const updatedRoot = removeActiveInstance(machine.instance, active.id);
+    const updatedRoot = removeActiveInstance(machine.instance, target.id);
     if (!updatedRoot) {
       // Root instance ceded - this is an error state
       return {
@@ -59,8 +76,26 @@ export async function runCommand(
     };
   }
 
-  // Replace active instance in tree with updated one
-  const updatedRoot = replaceInstance(machine.instance, active.id, updatedInstance);
+  // Handle suspend - instance is updated with suspended field
+  if (transitionResult && isSuspendResult(transitionResult)) {
+    const updatedRoot = replaceInstance(machine.instance, target.id, updatedInstance);
+    return {
+      machine: { ...machine, instance: updatedRoot },
+      result,
+    };
+  }
+
+  // Handle resume - suspended field is cleared
+  if (transitionResult && isResumeResult(transitionResult)) {
+    const updatedRoot = replaceInstance(machine.instance, target.id, updatedInstance);
+    return {
+      machine: { ...machine, instance: updatedRoot },
+      result,
+    };
+  }
+
+  // Replace target instance in tree with updated one
+  const updatedRoot = replaceInstance(machine.instance, target.id, updatedInstance);
 
   return {
     machine: { ...machine, instance: updatedRoot },
