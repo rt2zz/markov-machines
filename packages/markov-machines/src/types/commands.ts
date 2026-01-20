@@ -7,7 +7,18 @@ import type {
   SpawnTarget,
   SpawnOptions,
   TransitionToResult,
+  SuspendResult,
 } from "./transitions.js";
+
+/**
+ * Options for suspend helper in commands.
+ */
+export interface SuspendOptions {
+  /** Custom suspend ID (auto-generated if not provided) */
+  suspendId?: string;
+  /** Optional metadata for application use */
+  metadata?: Record<string, unknown>;
+}
 
 /**
  * Context passed to command execute functions.
@@ -26,6 +37,8 @@ export interface CommandContext<S = unknown> {
     state?: T,
     options?: SpawnOptions,
   ) => SpawnResult<T>;
+  /** Suspend the current instance */
+  suspend: (reason: string, options?: SuspendOptions) => SuspendResult;
 }
 
 /**
@@ -64,14 +77,23 @@ export interface ValueResult<T = unknown> {
 }
 
 /**
+ * Resume result - command resumes the current instance from suspension.
+ */
+export interface ResumeResult {
+  type: "resume";
+}
+
+/**
  * Union of all command results.
- * Commands can return a value, transition, spawn, or cede.
+ * Commands can return a value, transition, spawn, cede, suspend, or resume.
  */
 export type CommandResult<T = unknown> =
   | ValueResult<T>
   | TransitionToResult
   | SpawnResult
-  | CedeResult;
+  | CedeResult
+  | SuspendResult
+  | ResumeResult;
 
 /**
  * Type guard for ValueResult.
@@ -93,6 +115,14 @@ export function commandValue<T>(value: T): ValueResult<T> {
 }
 
 /**
+ * Helper to create a resume result.
+ * Use this in command execute functions to resume the current instance.
+ */
+export function commandResume(): ResumeResult {
+  return { type: "resume" };
+}
+
+/**
  * Info about a command for frontend display.
  */
 export interface CommandInfo {
@@ -109,6 +139,8 @@ export interface Command {
   type: "command";
   name: string;
   input: unknown;
+  /** Target specific instance (defaults to active instance) */
+  instanceId?: string;
 }
 
 /**
@@ -122,6 +154,46 @@ export function isCommand(value: unknown): value is Command {
     value.type === "command" &&
     "name" in value &&
     typeof value.name === "string"
+  );
+}
+
+/**
+ * Input to resume a suspended instance.
+ * Can be passed to runMachine to resume execution.
+ */
+export interface Resume {
+  type: "resume";
+  /** Instance ID to resume */
+  instanceId: string;
+  /** Suspend ID that must match the instance's current suspension */
+  suspendId: string;
+}
+
+/**
+ * Type guard for Resume.
+ */
+export function isResume(value: unknown): value is Resume {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "resume" &&
+    "instanceId" in value &&
+    typeof value.instanceId === "string" &&
+    "suspendId" in value &&
+    typeof value.suspendId === "string"
+  );
+}
+
+/**
+ * Type guard for ResumeResult.
+ */
+export function isResumeResult(value: unknown): value is ResumeResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    (value as ResumeResult).type === "resume"
   );
 }
 

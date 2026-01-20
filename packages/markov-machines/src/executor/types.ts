@@ -6,7 +6,13 @@ import type { Message } from "../types/messages.js";
 /**
  * Reason why the executor yielded control.
  */
-export type YieldReason = "end_turn" | "tool_use" | "max_tokens" | "cede";
+export type YieldReason =
+  | "end_turn"
+  | "tool_use"
+  | "max_tokens"
+  | "cede"
+  | "suspend"          // Instance just suspended
+  | "awaiting_resume"; // All leaves suspended, waiting for resume
 
 /**
  * Options for executor run.
@@ -42,6 +48,16 @@ export interface RunResult<AppMessage = unknown> {
 }
 
 /**
+ * Information about a suspended instance.
+ */
+export interface SuspendedInstanceInfo {
+  instanceId: string;
+  suspendId: string;
+  reason: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * A single step in machine execution.
  * Each step represents exactly one Claude API call or command execution.
  * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
@@ -52,11 +68,13 @@ export interface MachineStep<AppMessage = unknown> {
   /** Messages generated in this step */
   messages: Message<AppMessage>[];
   /** Why this step yielded */
-  yieldReason: "end_turn" | "tool_use" | "cede" | "max_tokens" | "command";
+  yieldReason: "end_turn" | "tool_use" | "cede" | "max_tokens" | "command" | "suspend" | "awaiting_resume";
   /** True if this is the final step (has response or hit limit) */
   done: boolean;
   /** Cede content if yieldReason is "cede" - string or Message[] */
   cedeContent?: string | Message<AppMessage>[];
+  /** Info about suspended instances (when yieldReason is "suspend" or "awaiting_resume") */
+  suspendedInstances?: SuspendedInstanceInfo[];
 }
 
 /**

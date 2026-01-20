@@ -23,6 +23,7 @@ export type {
   TransitionToResult,
   SpawnResult,
   CedeResult,
+  SuspendResult,
   SpawnTarget,
   SpawnOptions,
   TransitionToOptions,
@@ -35,6 +36,7 @@ export {
   isTransitionToResult,
   isSpawnResult,
   isCedeResult,
+  isSuspendResult,
 } from "./transitions.js";
 
 // State
@@ -53,15 +55,18 @@ export type {
 export { isNode, isPassiveNode } from "./node.js";
 
 // Instance
-export type { Instance, NodeState, ActiveLeafInfo } from "./instance.js";
+export type { Instance, NodeState, ActiveLeafInfo, SuspendInfo } from "./instance.js";
 export {
   createInstance,
   isInstance,
   isPassiveInstance,
+  isSuspendedInstance,
   getActiveInstance,
   getInstancePath,
   getAllInstances,
   getActiveLeaves,
+  getSuspendedInstances,
+  findInstanceById,
 } from "./instance.js";
 
 // Charter
@@ -92,6 +97,7 @@ export type {
   MachineConfig,
   SerializedMachine,
   SerializedInstance,
+  SerializedSuspendInfo,
 } from "./machine.js";
 
 // Pack
@@ -111,11 +117,14 @@ export type {
   AnyCommandDefinition,
   CommandResult,
   ValueResult,
+  ResumeResult,
   CommandInfo,
   CommandExecutionResult,
   Command,
+  Resume,
+  SuspendOptions,
 } from "./commands.js";
-export { isValueResult, commandValue, isCommand } from "./commands.js";
+export { isValueResult, commandValue, commandResume, isCommand, isResume, isResumeResult } from "./commands.js";
 
 // Client
 export type {

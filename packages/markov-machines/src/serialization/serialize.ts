@@ -122,6 +122,14 @@ export function serializeInstance(
     state: instance.state,
     child,
     ...(instance.packStates ? { packStates: instance.packStates } : {}),
+    ...(instance.suspended ? {
+      suspended: {
+        suspendId: instance.suspended.suspendId,
+        reason: instance.suspended.reason,
+        suspendedAt: instance.suspended.suspendedAt.toISOString(),
+        metadata: instance.suspended.metadata,
+      }
+    } : {}),
   };
 }
 

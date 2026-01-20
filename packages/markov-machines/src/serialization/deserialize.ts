@@ -40,6 +40,14 @@ export function deserializeInstance(
     state: stateResult.data,
     child,
     ...(serialized.packStates ? { packStates: serialized.packStates } : {}),
+    ...(serialized.suspended ? {
+      suspended: {
+        suspendId: serialized.suspended.suspendId,
+        reason: serialized.suspended.reason,
+        suspendedAt: new Date(serialized.suspended.suspendedAt),
+        metadata: serialized.suspended.metadata,
+      }
+    } : {}),
   };
 }
 

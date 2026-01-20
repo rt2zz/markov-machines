@@ -1,18 +1,19 @@
-import type { Instance } from "../types/instance.js";
+import type { Instance, SuspendInfo } from "../types/instance.js";
 import type { Node } from "../types/node.js";
 import type {
   CommandContext,
   CommandResult,
   CommandExecutionResult,
 } from "../types/commands.js";
-import { isValueResult } from "../types/commands.js";
+import { isValueResult, isResumeResult } from "../types/commands.js";
 import type { SpawnTarget, SpawnOptions } from "../types/transitions.js";
 import {
   isTransitionToResult,
   isSpawnResult,
   isCedeResult,
+  isSuspendResult,
 } from "../types/transitions.js";
-import { cede, spawn } from "../helpers/cede-spawn.js";
+import { cede, spawn, suspend } from "../helpers/cede-spawn.js";
 import { deepMerge } from "../types/state.js";
 import { createInstance } from "../types/instance.js";
 
@@ -28,6 +29,7 @@ export async function executeCommand(
   result: CommandExecutionResult;
   instance: Instance;
   transitionResult?: CommandResult;
+  suspendInfo?: SuspendInfo;
 }> {
   const command = instance.node.commands?.[commandName];
   if (!command) {
@@ -61,6 +63,7 @@ export async function executeCommand(
     updateState,
     cede,
     spawn,
+    suspend,
   };
 
   try {
@@ -123,6 +126,42 @@ export async function executeCommand(
       return {
         result: { success: true, value: cmdResult.content },
         instance: { ...instance, state: currentState },
+        transitionResult: cmdResult,
+      };
+    }
+
+    // Handle suspend result
+    if (isSuspendResult(cmdResult)) {
+      const suspendInfo: SuspendInfo = {
+        suspendId: cmdResult.suspendId,
+        reason: cmdResult.reason,
+        suspendedAt: new Date(),
+        metadata: cmdResult.metadata,
+      };
+      const updatedInstance: Instance = {
+        ...instance,
+        state: currentState,
+        suspended: suspendInfo,
+      };
+      return {
+        result: { success: true },
+        instance: updatedInstance,
+        transitionResult: cmdResult,
+        suspendInfo,
+      };
+    }
+
+    // Handle resume result
+    if (isResumeResult(cmdResult)) {
+      // Clear the suspended field
+      const { suspended: _, ...rest } = instance;
+      const updatedInstance: Instance = {
+        ...rest,
+        state: currentState,
+      };
+      return {
+        result: { success: true },
+        instance: updatedInstance,
         transitionResult: cmdResult,
       };
     }

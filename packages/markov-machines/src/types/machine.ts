@@ -1,5 +1,5 @@
 import type { Charter } from "./charter.js";
-import type { Instance } from "./instance.js";
+import type { Instance, SuspendInfo } from "./instance.js";
 import type { Message } from "./messages.js";
 import type { Ref, SerialNode } from "./refs.js";
 
@@ -29,6 +29,18 @@ export interface Machine<AppMessage = unknown> {
 }
 
 /**
+ * Serialized suspend info for persistence.
+ * Uses ISO string for date instead of Date object.
+ */
+export interface SerializedSuspendInfo {
+  suspendId: string;
+  reason: string;
+  /** ISO 8601 date string */
+  suspendedAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * Serialized node instance for persistence.
  */
 export interface SerializedInstance {
@@ -42,6 +54,8 @@ export interface SerializedInstance {
   child?: SerializedInstance | SerializedInstance[];
   /** Pack states (only on root instance) */
   packStates?: Record<string, unknown>;
+  /** Suspension info if suspended */
+  suspended?: SerializedSuspendInfo;
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { Instance } from "../types/instance.js";
+import type { Instance, SuspendInfo } from "../types/instance.js";
 import type { Node } from "../types/node.js";
 import type { Message } from "../types/messages.js";
 import type { TransitionResult } from "../types/transitions.js";
@@ -6,6 +6,7 @@ import {
   isTransitionToResult,
   isSpawnResult,
   isCedeResult,
+  isSuspendResult,
 } from "../types/transitions.js";
 import { createInstance } from "../types/instance.js";
 import type { StandardNodeConfig } from "../executor/types.js";
@@ -15,9 +16,11 @@ export interface TransitionOutcome {
   state: unknown;
   children: Instance | Instance[] | undefined;
   executorConfig?: StandardNodeConfig;
-  yieldReason: "tool_use" | "cede";
+  yieldReason: "tool_use" | "cede" | "suspend";
   /** Content from cede (string or Message[]) */
   cedeContent?: string | Message<unknown>[];
+  /** Suspend info if yieldReason is "suspend" */
+  suspendInfo?: SuspendInfo;
 }
 
 /**
@@ -39,6 +42,22 @@ export function handleTransitionResult(
       children: currentChildren,
       yieldReason: "cede",
       cedeContent: result.content,
+    };
+  }
+
+  if (isSuspendResult(result)) {
+    // Suspend: return with suspend yield reason and info
+    return {
+      node: currentNode,
+      state: currentState,
+      children: currentChildren,
+      yieldReason: "suspend",
+      suspendInfo: {
+        suspendId: result.suspendId,
+        reason: result.reason,
+        suspendedAt: new Date(),
+        metadata: result.metadata,
+      },
     };
   }
 

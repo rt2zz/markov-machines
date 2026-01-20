@@ -1,19 +1,19 @@
 import type { Machine } from "../types/machine.js";
-import type { RunOptions, MachineStep, RunResult } from "../executor/types.js";
+import type { RunOptions, MachineStep, RunResult, SuspendedInstanceInfo } from "../executor/types.js";
 import type { Instance, ActiveLeafInfo } from "../types/instance.js";
-import type { Command } from "../types/commands.js";
+import type { Command, Resume } from "../types/commands.js";
 import type { Message } from "../types/messages.js";
 import type { YieldReason } from "../executor/types.js";
-import { getInstancePath, getActiveLeaves, isPassiveInstance } from "../types/instance.js";
+import { getInstancePath, getActiveLeaves, isPassiveInstance, getSuspendedInstances, findInstanceById } from "../types/instance.js";
 import { userMessage } from "../types/messages.js";
-import { isCommand } from "../types/commands.js";
+import { isCommand, isResume } from "../types/commands.js";
 import { runCommand } from "./commands.js";
 
 /**
  * Input type for runMachine.
- * Can be a string (user message) or a Command object.
+ * Can be a string (user message), a Command object, or a Resume object.
  */
-export type RunMachineInput = string | Command;
+export type RunMachineInput = string | Command | Resume;
 
 /** Check if packStates has any entries */
 const hasPackStates = (ps?: Record<string, unknown>): boolean =>
@@ -228,6 +228,35 @@ function wrapMessages<AppMessage>(
 }
 
 /**
+ * Update an instance in the tree by ID.
+ */
+function updateInstanceById(
+  root: Instance,
+  targetId: string,
+  updater: (inst: Instance) => Instance,
+): Instance {
+  if (root.id === targetId) {
+    return updater(root);
+  }
+
+  if (!root.child) {
+    return root;
+  }
+
+  if (Array.isArray(root.child)) {
+    return {
+      ...root,
+      child: root.child.map((c) => updateInstanceById(c, targetId, updater)),
+    };
+  }
+
+  return {
+    ...root,
+    child: updateInstanceById(root.child, targetId, updater),
+  };
+}
+
+/**
  * Merge results from parallel leaf execution.
  * Processes in descending index order so removals don't invalidate later indices.
  */
@@ -311,12 +340,47 @@ export async function* runMachine<AppMessage = unknown>(
   input: RunMachineInput,
   options?: RunOptions<AppMessage>,
 ): AsyncGenerator<MachineStep<AppMessage>> {
+  // Handle Resume input
+  if (isResume(input)) {
+    const targetInstance = findInstanceById(machine.instance, input.instanceId);
+    if (!targetInstance) {
+      throw new Error(`Instance not found: ${input.instanceId}`);
+    }
+    if (!targetInstance.suspended) {
+      throw new Error(`Instance ${input.instanceId} is not suspended`);
+    }
+    if (targetInstance.suspended.suspendId !== input.suspendId) {
+      throw new Error(
+        `Suspend ID mismatch: expected ${targetInstance.suspended.suspendId}, got ${input.suspendId}`
+      );
+    }
+
+    // Clear the suspended field
+    const updatedInstance = updateInstanceById(
+      machine.instance,
+      input.instanceId,
+      (inst) => {
+        const { suspended: _, ...rest } = inst;
+        return rest as Instance;
+      },
+    );
+
+    yield {
+      instance: updatedInstance,
+      messages: [userMessage(`[Resumed instance ${input.instanceId}]`)],
+      yieldReason: "command",
+      done: false, // Not done - resumed instance should continue
+    };
+    return;
+  }
+
   // Handle Command input
   if (isCommand(input)) {
     const { machine: updatedMachine, result } = await runCommand(
       machine,
       input.name,
       input.input,
+      input.instanceId,
     );
 
     // Create a message for history tracking
@@ -352,6 +416,25 @@ export async function* runMachine<AppMessage = unknown>(
     const activeLeaves = getActiveLeaves(currentInstance);
 
     if (activeLeaves.length === 0) {
+      // Check if all leaves are suspended
+      const suspendedInstances = getSuspendedInstances(currentInstance);
+      if (suspendedInstances.length > 0) {
+        // All leaves are suspended - yield awaiting_resume
+        const suspendedInfo: SuspendedInstanceInfo[] = suspendedInstances.map((inst) => ({
+          instanceId: inst.id,
+          suspendId: inst.suspended!.suspendId,
+          reason: inst.suspended!.reason,
+          metadata: inst.suspended!.metadata,
+        }));
+        yield {
+          instance: currentInstance,
+          messages: [],
+          yieldReason: "awaiting_resume",
+          done: true,
+          suspendedInstances: suspendedInfo,
+        };
+        return;
+      }
       throw new Error("No active instances found");
     }
 

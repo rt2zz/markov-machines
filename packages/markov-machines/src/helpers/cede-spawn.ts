@@ -1,9 +1,11 @@
+import { v4 as uuid } from "uuid";
 import type { Node } from "../types/node.js";
 import type {
   CedeResult,
   SpawnResult,
   SpawnTarget,
   SpawnOptions,
+  SuspendResult,
 } from "../types/transitions.js";
 import type { Message } from "../types/messages.js";
 
@@ -81,5 +83,54 @@ export function spawn<T = unknown>(
   return {
     type: "spawn",
     children,
+  };
+}
+
+/**
+ * Options for suspend helper.
+ */
+export interface SuspendHelperOptions {
+  /** Custom suspend ID (auto-generated if not provided) */
+  suspendId?: string;
+  /** Optional metadata for application use */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Suspend the current instance.
+ * The instance remains in the tree but is excluded from getActiveLeaves().
+ * Can be resumed via Resume input or a command that returns ResumeResult.
+ *
+ * @param reason - Human-readable reason for suspension
+ * @param options - Optional suspend ID and metadata
+ * @returns SuspendResult to return from transition execute
+ *
+ * @example
+ * // Suspend for human approval
+ * const awaitApproval = createTransition({
+ *   description: "Wait for approval",
+ *   execute: (state) => suspend("Waiting for human approval", {
+ *     metadata: { action: state.pendingAction }
+ *   }),
+ * });
+ *
+ * @example
+ * // Suspend with custom ID
+ * const pauseForReview = createTransition({
+ *   description: "Pause for review",
+ *   execute: (state) => suspend("Review required", {
+ *     suspendId: `review-${state.itemId}`,
+ *   }),
+ * });
+ */
+export function suspend(
+  reason: string,
+  options?: SuspendHelperOptions,
+): SuspendResult {
+  return {
+    type: "suspend",
+    suspendId: options?.suspendId ?? uuid(),
+    reason,
+    metadata: options?.metadata,
   };
 }

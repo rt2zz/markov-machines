@@ -3,7 +3,8 @@ export { createCharter } from "./src/core/charter.js";
 export { createNode } from "./src/core/node.js";
 export { createMachine } from "./src/core/machine.js";
 export { createTransition } from "./src/core/transition.js";
-export { cede, spawn } from "./src/helpers/cede-spawn.js";
+export { cede, spawn, suspend } from "./src/helpers/cede-spawn.js";
+export type { SuspendHelperOptions } from "./src/helpers/cede-spawn.js";
 export type { TransitionConfig } from "./src/core/transition.js";
 export { runMachine, runMachineToCompletion } from "./src/core/run.js";
 export type { RunMachineInput } from "./src/core/run.js";
@@ -28,6 +29,8 @@ export type {
   RunOptions,
   RunResult,
   MachineStep,
+  YieldReason,
+  SuspendedInstanceInfo,
 } from "./src/executor/types.js";
 
 // Serialization
@@ -46,11 +49,13 @@ export type {
   // Instance
   Instance,
   NodeState,
+  SuspendInfo,
   // Machine
   Machine,
   MachineConfig,
   SerializedMachine,
   SerializedInstance,
+  SerializedSuspendInfo,
   // Refs
   Ref,
   SerialNode,
@@ -65,6 +70,7 @@ export type {
   TransitionToResult,
   SpawnResult,
   CedeResult,
+  SuspendResult,
   SpawnTarget,
   SpawnOptions,
   TransitionToOptions,
@@ -96,9 +102,12 @@ export type {
   AnyCommandDefinition,
   CommandResult,
   ValueResult,
+  ResumeResult,
   CommandInfo,
   CommandExecutionResult,
   Command,
+  Resume,
+  SuspendOptions,
   // Client
   CommandMeta,
   NodeCommands,
@@ -119,6 +128,10 @@ export {
   getActiveInstance,
   getInstancePath,
   getAllInstances,
+  getActiveLeaves,
+  getSuspendedInstances,
+  findInstanceById,
+  isSuspendedInstance,
   isCodeTransition,
   isGeneralTransition,
   transitionHasArguments,
@@ -126,6 +139,7 @@ export {
   isTransitionToResult,
   isSpawnResult,
   isCedeResult,
+  isSuspendResult,
   isPack,
   isPackToolDefinition,
   isAnthropicBuiltinTool,
@@ -133,7 +147,10 @@ export {
   toolReply,
   isValueResult,
   commandValue,
+  commandResume,
   isCommand,
+  isResume,
+  isResumeResult,
 } from "./src/types/index.js";
 
 // Message helpers
