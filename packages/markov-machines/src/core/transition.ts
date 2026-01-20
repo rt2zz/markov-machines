@@ -4,37 +4,7 @@ import type {
   CodeTransition,
   TransitionContext,
   TransitionResult,
-  TransitionHelpers,
-  SpawnTarget,
-  SpawnOptions,
-  CedeResult,
-  SpawnResult,
 } from "../types/transitions.js";
-
-/**
- * Create the transition helpers object.
- */
-export function createHelpers(): TransitionHelpers {
-  return {
-    cede: <P = unknown>(payload?: P): CedeResult<P> => ({
-      type: "cede",
-      payload,
-    }),
-    spawn: <T = unknown>(
-      nodeOrTargets: Node<T> | SpawnTarget<T>[],
-      state?: T,
-      options?: SpawnOptions,
-    ): SpawnResult<T> => {
-      const children: SpawnTarget<T>[] = Array.isArray(nodeOrTargets)
-        ? nodeOrTargets
-        : [{ node: nodeOrTargets, state, executorConfig: options?.executorConfig }];
-      return {
-        type: "spawn",
-        children,
-      };
-    },
-  };
-}
 
 /**
  * Configuration for creating a transition.
@@ -45,12 +15,12 @@ export interface TransitionConfig<S> {
   /** Optional custom arguments schema */
   arguments?: z.ZodType;
   /**
-   * Execute function with yield/spawn helpers.
+   * Execute function that returns a transition result.
+   * Use standalone cede() and spawn() functions for child management.
    */
   execute: (
     state: S,
     ctx: TransitionContext,
-    helpers: TransitionHelpers,
   ) => Promise<TransitionResult> | TransitionResult;
 }
 
@@ -78,7 +48,7 @@ export function createTransition<S>(
  * // Normal transition
  * const toCheckout = createTransition({
  *   description: "Proceed to checkout",
- *   execute: (state, ctx, helpers) => transitionTo(checkoutNode, {
+ *   execute: (state) => transitionTo(checkoutNode, {
  *     items: state.cart,
  *   }),
  * });
@@ -87,14 +57,14 @@ export function createTransition<S>(
  * // Spawn children
  * const spawnWorker = createTransition({
  *   description: "Spawn a worker",
- *   execute: (state, ctx, { spawn }) => spawn(workerNode, { taskId: "123" }),
+ *   execute: (state) => spawn(workerNode, { taskId: "123" }),
  * });
  *
  * @example
  * // Cede to parent
  * const complete = createTransition({
  *   description: "Complete and cede",
- *   execute: (state, ctx, { cede }) => cede({ result: state.result }),
+ *   execute: (state) => cede(`Result: ${state.result}`),
  * });
  */
 export function createTransition<S>(
@@ -107,10 +77,8 @@ export function createTransition<S>(
   return {
     description: config.description,
     arguments: config.arguments,
-    execute: (state: S, ctx: TransitionContext, helpers: TransitionHelpers) => {
-      // Use provided helpers or create default ones
-      const h = helpers ?? createHelpers();
-      return config.execute(state, ctx, h);
+    execute: (state: S, ctx: TransitionContext) => {
+      return config.execute(state, ctx);
     },
   };
 }

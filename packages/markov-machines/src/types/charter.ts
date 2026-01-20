@@ -16,19 +16,14 @@ export interface CharterConfig<AppMessage = unknown> {
   /** Registered tools (for ref-based lookup, available to all nodes) */
   tools?: Record<string, AnyToolDefinition>;
   /** Registered transitions (for ref-based lookup) */
-  // Registry holds items with heterogeneous state types, requiring `any`
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  transitions?: Record<string, Transition<any>>;
+  transitions?: Record<string, Transition<unknown>>;
   /**
    * Registered nodes (for ref-based lookup).
    * Nodes must output AppMessage or have no output.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nodes?: Record<string, Node<any, AppMessage> | Node<any, never>>;
+  nodes?: Record<string, Node<unknown, AppMessage> | Node<unknown, never>>;
   /** Registered packs (reusable modules with state and tools) */
-  // Registry holds items with heterogeneous state types, requiring `any`
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  packs?: Pack<any>[];
+  packs?: Pack<unknown>[];
 }
 
 /**
@@ -43,17 +38,12 @@ export interface Charter<AppMessage = unknown> {
   /** Registered tools (available to all nodes via ref resolution) */
   tools: Record<string, AnyToolDefinition>;
   /** Registered transitions */
-  // Registry holds items with heterogeneous state types, requiring `any`
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  transitions: Record<string, Transition<any>>;
+  transitions: Record<string, Transition<unknown>>;
   /**
    * Registered nodes.
    * Nodes must output AppMessage or have no output.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nodes: Record<string, Node<any, AppMessage> | Node<any, never>>;
+  nodes: Record<string, Node<unknown, AppMessage> | Node<unknown, never>>;
   /** Registered packs */
-  // Registry holds items with heterogeneous state types, requiring `any`
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  packs: Pack<any>[];
+  packs: Pack<unknown>[];
 }

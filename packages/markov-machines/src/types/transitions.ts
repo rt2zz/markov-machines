@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { Ref, SerialNode, SerialTransition } from "./refs.js";
 import type { Node } from "./node.js";
 import type { StandardNodeConfig } from "../executor/types.js";
+import type { Message } from "./messages.js";
 
 /**
  * Context passed to code transition execute functions.
@@ -15,6 +16,7 @@ export interface TransitionContext {
 
 /**
  * Spawn target specification.
+ * Supports both standard and passive nodes.
  */
 export interface SpawnTarget<T = unknown> {
   node: Node<T>;
@@ -25,6 +27,7 @@ export interface SpawnTarget<T = unknown> {
 
 /**
  * Normal transition - replace current instance with new node.
+ * Supports both standard and passive nodes.
  */
 export interface TransitionToResult<T = unknown> {
   type: "transition";
@@ -43,12 +46,14 @@ export interface SpawnResult<T = unknown> {
 }
 
 /**
- * Cede - return control to parent with optional payload.
+ * Cede - return control to parent with optional content.
  * The ceding instance is REMOVED from the tree.
+ * @typeParam M - The application message type for content (defaults to unknown).
  */
-export interface CedeResult<P = unknown> {
+export interface CedeResult<M = unknown> {
   type: "cede";
-  payload?: P;
+  /** String or Message[] to pass to parent */
+  content?: string | Message<M>[];
 }
 
 /**
@@ -75,26 +80,6 @@ export interface TransitionToOptions {
   executorConfig?: StandardNodeConfig;
 }
 
-/**
- * Helpers provided to transition execute functions.
- */
-export interface TransitionHelpers {
-  /**
-   * Cede control back to parent with optional payload.
-   * The current instance is REMOVED from the tree.
-   */
-  cede: <P = unknown>(payload?: P) => CedeResult<P>;
-
-  /**
-   * Spawn one or more child instances.
-   * Children are added to the current node's children array.
-   */
-  spawn: <T = unknown>(
-    nodeOrTargets: Node<T> | SpawnTarget<T>[],
-    state?: T,
-    options?: SpawnOptions,
-  ) => SpawnResult<T>;
-}
 
 /**
  * Code-defined transition (not serializable).
@@ -106,12 +91,12 @@ export interface CodeTransition<S = unknown> {
   /** Optional custom arguments schema */
   arguments?: z.ZodType;
   /**
-   * Execute function with yield/spawn helpers.
+   * Execute function that returns a transition result.
+   * Use standalone cede() and spawn() functions for child management.
    */
   execute: (
     state: S,
     ctx: TransitionContext,
-    helpers: TransitionHelpers,
   ) => Promise<TransitionResult> | TransitionResult;
 }
 
@@ -136,6 +121,7 @@ export type Transition<S = unknown> =
 
 /**
  * Helper to create a type-safe transition result.
+ * Supports both standard and passive nodes.
  */
 export function transitionTo<T>(
   node: Node<T>,

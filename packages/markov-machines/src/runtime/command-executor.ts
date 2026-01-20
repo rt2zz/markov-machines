@@ -6,17 +6,13 @@ import type {
   CommandExecutionResult,
 } from "../types/commands.js";
 import { isValueResult } from "../types/commands.js";
-import type {
-  SpawnTarget,
-  SpawnOptions,
-  CedeResult,
-  SpawnResult,
-} from "../types/transitions.js";
+import type { SpawnTarget, SpawnOptions } from "../types/transitions.js";
 import {
   isTransitionToResult,
   isSpawnResult,
   isCedeResult,
 } from "../types/transitions.js";
+import { cede, spawn } from "../helpers/cede-spawn.js";
 import { deepMerge } from "../types/state.js";
 import { createInstance } from "../types/instance.js";
 
@@ -63,23 +59,8 @@ export async function executeCommand(
   const ctx: CommandContext<unknown> = {
     state: currentState,
     updateState,
-    cede: <P = unknown>(payload?: P): CedeResult<P> => ({
-      type: "cede",
-      payload,
-    }),
-    spawn: <T = unknown>(
-      nodeOrTargets: Node<T> | SpawnTarget<T>[],
-      state?: T,
-      options?: SpawnOptions,
-    ): SpawnResult<T> => {
-      const children: SpawnTarget<T>[] = Array.isArray(nodeOrTargets)
-        ? nodeOrTargets
-        : [{ node: nodeOrTargets, state, executorConfig: options?.executorConfig }];
-      return {
-        type: "spawn",
-        children,
-      };
-    },
+    cede,
+    spawn,
   };
 
   try {
@@ -140,7 +121,7 @@ export async function executeCommand(
     if (isCedeResult(cmdResult)) {
       // Return the cede result - caller must handle removing this instance
       return {
-        result: { success: true, value: cmdResult.payload },
+        result: { success: true, value: cmdResult.content },
         instance: { ...instance, state: currentState },
         transitionResult: cmdResult,
       };

@@ -6,7 +6,6 @@ import type {
   Transition,
   TransitionContext,
   TransitionResult,
-  TransitionHelpers,
 } from "../types/transitions.js";
 import { transitionTo } from "../types/transitions.js";
 import type { SerialNode, Ref } from "../types/refs.js";
@@ -15,7 +14,6 @@ import {
   isGeneralTransition,
 } from "../types/transitions.js";
 import { isRef, isSerialTransition } from "../types/refs.js";
-import { createHelpers } from "../core/transition.js";
 import { resolveTransitionRef } from "./ref-resolver.js";
 
 /**
@@ -30,14 +28,13 @@ export async function executeTransition<S>(
   args: unknown,
 ): Promise<TransitionResult> {
   const ctx: TransitionContext = { args, reason };
-  const helpers = createHelpers();
 
   // Resolve ref to actual transition
   const resolved = resolveTransitionRef(charter, transition);
 
-  // Code transition - execute with helpers
+  // Code transition - execute
   if (isCodeTransition<S>(resolved)) {
-    return resolved.execute(state, ctx, helpers);
+    return resolved.execute(state, ctx);
   }
 
   // General transition - deserialize inline node

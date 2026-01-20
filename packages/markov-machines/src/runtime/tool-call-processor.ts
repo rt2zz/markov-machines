@@ -2,6 +2,7 @@ import type { Charter } from "../types/charter.js";
 import type { Instance } from "../types/instance.js";
 import type { Node } from "../types/node.js";
 import type {
+  Message,
   ToolResultBlock,
   TextBlock,
   OutputBlock,
@@ -29,6 +30,8 @@ export interface ToolCallContext {
   packStates: Record<string, unknown>;
   currentState: unknown;
   currentNode: Node<unknown>;
+  /** Conversation history for getInstanceMessages */
+  history?: Message<unknown>[];
 }
 
 export interface ToolCallResult {
@@ -240,7 +243,14 @@ async function handleRegularTool(
     result: toolResultStr,
     isError,
     userMessage,
-  } = await executeTool(tool, toolInput, toolState, onUpdate);
+  } = await executeTool(
+    tool,
+    toolInput,
+    toolState,
+    onUpdate,
+    ctx.instance.id,
+    ctx.history ?? [],
+  );
 
   const results: (ToolResultBlock | TextBlock | OutputBlock<unknown>)[] = [
     toolResult(id, toolResultStr, isError),

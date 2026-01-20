@@ -1,5 +1,6 @@
 import type { Instance } from "../types/instance.js";
 import type { Node } from "../types/node.js";
+import type { Message } from "../types/messages.js";
 import type { TransitionResult } from "../types/transitions.js";
 import {
   isTransitionToResult,
@@ -15,7 +16,8 @@ export interface TransitionOutcome {
   children: Instance | Instance[] | undefined;
   executorConfig?: StandardNodeConfig;
   yieldReason: "tool_use" | "cede";
-  cedePayload?: unknown;
+  /** Content from cede (string or Message[]) */
+  cedeContent?: string | Message<unknown>[];
 }
 
 /**
@@ -36,7 +38,7 @@ export function handleTransitionResult(
       state: currentState,
       children: currentChildren,
       yieldReason: "cede",
-      cedePayload: result.payload,
+      cedeContent: result.content,
     };
   }
 

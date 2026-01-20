@@ -3,6 +3,7 @@ import {
   createCharter,
   createNode,
   createStandardExecutor,
+  spawn,
   type Node,
   type CodeTransition,
 } from "markov-machines";
@@ -93,9 +94,9 @@ Be concise and helpful.`,
       arguments: z.object({
         query: z.string().describe("What to research (e.g., 'best wool blankets', 'durable hiking boots')"),
       }),
-      execute: async (_state, ctx, { spawn }) => {
+      execute: (_state, ctx) => {
         const args = ctx.args as { query: string };
-        return spawn(productResearcherNode, { query: args.query, findings: [] }) as ReturnType<typeof spawn>;
+        return spawn(productResearcherNode, { query: args.query, findings: [] });
       },
     } as CodeTransition<TodoState>,
   },
