@@ -25,20 +25,16 @@ export function deserializeInstance(
   }
 
   // Recursively deserialize children
-  let child: Instance | Instance[] | undefined;
-  if (serialized.child) {
-    if (Array.isArray(serialized.child)) {
-      child = serialized.child.map((c) => deserializeInstance(charter, c));
-    } else {
-      child = deserializeInstance(charter, serialized.child);
-    }
+  let children: Instance[] | undefined;
+  if (serialized.children && serialized.children.length > 0) {
+    children = serialized.children.map((c) => deserializeInstance(charter, c));
   }
 
   return {
     id: serialized.id,
     node,
     state: stateResult.data,
-    child,
+    children,
     ...(serialized.packStates ? { packStates: serialized.packStates } : {}),
     ...(serialized.suspended ? {
       suspended: {

@@ -68,3 +68,10 @@ Public APIs are exported from `packages/markov-machines/index.ts` including:
 - Transition helpers: `createTransition`, `transitionTo`, `createHelpers`
 - Serialization helpers: `serializeMachine`, `deserializeMachine`, etc.
 - Types for nodes, instances, transitions, tools, messages, and packs
+
+## Decisions to Revisit
+
+- Sending user input to passive nodes, and otherwise controlling the message history passive nodes have access to
+- Should passive nodes be allowed to end_turn? What controls do we need to encourage them to conclude their work correctly? Auto-cede?
+- Allowing packs to be provided at any level of the instance tree (maybe packBoundary option?)
+- Allowing non-current node tools to operate on their respective tool owner's state. Or is this an anti-pattern and should rely on packs instead of inherited tools?

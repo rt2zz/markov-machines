@@ -35,8 +35,8 @@ export interface Instance<N extends Node = Node> {
   node: N;
   /** Current state for this node */
   state: NodeState<N>;
-  /** Optional child instance(s) - uses Instance (not Instance<any>) to avoid type explosion */
-  child?: Instance | Instance[];
+  /** Optional child instances - always an array when present */
+  children?: Instance[];
   /** Pack states (only on root instance, shared across all nodes) */
   packStates?: Record<string, unknown>;
   /** Effective executor config for this instance (override or from node) */
@@ -47,19 +47,26 @@ export interface Instance<N extends Node = Node> {
 
 /**
  * Create a new instance with auto-generated ID.
+ * Accepts either a single child or array for convenience - normalizes to array internally.
  */
 export function createInstance<N extends Node>(
   node: N,
   state: NodeState<N>,
-  child?: Instance | Instance[],
+  children?: Instance | Instance[],
   packStates?: Record<string, unknown>,
   executorConfig?: StandardNodeConfig,
 ): Instance<N> {
+  // Normalize children to array
+  let normalizedChildren: Instance[] | undefined;
+  if (children !== undefined) {
+    normalizedChildren = Array.isArray(children) ? children : [children];
+  }
+
   return {
     id: uuid(),
     node,
     state,
-    child,
+    children: normalizedChildren,
     packStates,
     executorConfig,
   };
@@ -86,42 +93,39 @@ export function isPassiveInstance(instance: Instance): boolean {
 }
 
 /**
+ * Get children of an instance as an array.
+ * Returns empty array if no children.
+ */
+export function getChildren(inst: Instance): Instance[] {
+  return inst.children ?? [];
+}
+
+/**
  * Get the active instance (last deepest child).
- * When child is an array, picks the LAST element.
+ * When children exist, picks the LAST element.
  */
 export function getActiveInstance(instance: Instance): Instance {
   let current: Instance = instance;
-  while (current.child) {
-    if (Array.isArray(current.child)) {
-      if (current.child.length === 0) break;
-      const lastChild = current.child[current.child.length - 1];
-      if (!lastChild) break;
-      current = lastChild;
-    } else {
-      current = current.child;
-    }
+  while (current.children && current.children.length > 0) {
+    const lastChild = current.children[current.children.length - 1];
+    if (!lastChild) break;
+    current = lastChild;
   }
   return current;
 }
 
 /**
  * Get all instances from root to active leaf.
- * When encountering arrays, follows the LAST child path.
+ * When encountering children, follows the LAST child path.
  */
 export function getInstancePath(instance: Instance): Instance[] {
   const path: Instance[] = [];
   let current: Instance | undefined = instance;
   while (current) {
     path.push(current);
-    if (!current.child) break;
-    if (Array.isArray(current.child)) {
-      current =
-        current.child.length > 0
-          ? current.child[current.child.length - 1]
-          : undefined;
-    } else {
-      current = current.child;
-    }
+    const children = current.children;
+    if (!children || children.length === 0) break;
+    current = children[children.length - 1];
   }
   return path;
 }
@@ -154,11 +158,8 @@ export function getAllInstances(instance: Instance, maxDepth = 100): Instance[] 
     visited.add(inst.id);
 
     const result: Instance[] = [inst];
-    if (inst.child) {
-      const children = Array.isArray(inst.child) ? inst.child : [inst.child];
-      for (const child of children) {
-        result.push(...traverse(child, depth + 1));
-      }
+    for (const child of getChildren(inst)) {
+      result.push(...traverse(child, depth + 1));
     }
     return result;
   }
@@ -172,7 +173,7 @@ export function getAllInstances(instance: Instance, maxDepth = 100): Instance[] 
 export interface ActiveLeafInfo {
   /** Path from root to leaf (inclusive) */
   path: Instance[];
-  /** Index path for tree updates (e.g., [0, 2] = root.child[0].child[2]) */
+  /** Index path for tree updates (e.g., [0, 2] = root.children[0].children[2]) */
   leafIndex: number[];
   /** Whether this is a passive instance */
   isPassive: boolean;
@@ -197,7 +198,8 @@ export function getActiveLeaves(instance: Instance): ActiveLeafInfo[] {
       return;
     }
 
-    if (!inst.child) {
+    const children = getChildren(inst);
+    if (children.length === 0) {
       // Leaf node - include it
       results.push({
         path: currentPath,
@@ -207,7 +209,6 @@ export function getActiveLeaves(instance: Instance): ActiveLeafInfo[] {
       return;
     }
 
-    const children = Array.isArray(inst.child) ? inst.child : [inst.child];
     children.forEach((child, i) => traverse(child, currentPath, [...indices, i]));
   }
 
@@ -232,10 +233,27 @@ export function getSuspendedInstances(instance: Instance, maxDepth = 100): Insta
 
 /**
  * Find an instance by ID in the tree.
+ * Uses early return for efficiency - stops as soon as the ID is found.
  */
 export function findInstanceById(root: Instance, id: string, maxDepth = 100): Instance | undefined {
-  const all = getAllInstances(root, maxDepth);
-  return all.find(inst => inst.id === id);
+  const visited = new Set<string>();
+
+  function search(inst: Instance, depth: number): Instance | undefined {
+    if (depth > maxDepth) return undefined;
+    if (visited.has(inst.id)) return undefined;
+    visited.add(inst.id);
+
+    // Early return if found
+    if (inst.id === id) return inst;
+
+    for (const child of getChildren(inst)) {
+      const found = search(child, depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  return search(root, 0);
 }
 
 /**

@@ -81,6 +81,7 @@ describe("spawn behavior", () => {
 
     // Spawn transition
     const spawnChild: CodeTransition<ParentState> = {
+      type: "code",
       description: "Spawn a child",
       execute: () => {
         return spawn(childNode, { query: "test query", result: undefined });
@@ -102,7 +103,7 @@ describe("spawn behavior", () => {
       return {
         instance: {
           ...instance,
-          child: newChild,
+          children: [newChild],
         },
         yieldReason: "end_turn",
       };
@@ -122,9 +123,9 @@ describe("spawn behavior", () => {
     const result = await runMachineToCompletion(machine, "spawn a child");
 
     // Verify child was added
-    expect(result.instance.child).toBeDefined();
-    expect(result.instance.child).not.toBeInstanceOf(Array);
-    const child = result.instance.child as Instance;
+    expect(result.instance.children).toBeDefined();
+    expect(result.instance.children?.length).toBe(1);
+    const child = result.instance.children![0]!;
     expect(child.node.id).toBe(childNode.id);
     expect(child.state).toEqual({ query: "test query", result: undefined });
   });
@@ -151,7 +152,7 @@ describe("spawn behavior", () => {
         // First call - spawn the child
         const newChild = createInstance(childNode, { query: "spawned", result: undefined });
         return {
-          instance: { ...instance, child: newChild },
+          instance: { ...instance, children: [newChild] },
           yieldReason: "end_turn",
         };
       }
@@ -203,7 +204,7 @@ describe("spawn continuation", () => {
         // First call: parent spawns child (tool_use because spawn is a tool)
         const newChild = createInstance(childNode, { query: "research", result: undefined });
         return {
-          instance: { ...instance, child: newChild },
+          instance: { ...instance, children: [newChild] },
           yieldReason: "tool_use", // Spawn returns tool_use to continue on child
           messages: [],
         };
@@ -232,7 +233,7 @@ describe("spawn continuation", () => {
     expect(callCount).toBe(2);
 
     // Child should exist
-    expect(result.instance.child).toBeDefined();
+    expect(result.instance.children).toBeDefined();
 
     // Check yield reason
     expect(result.yieldReason).toBe("end_turn");
@@ -257,7 +258,7 @@ describe("spawn continuation", () => {
       // Parent spawns AND provides a response
       const newChild = createInstance(childNode, { query: "research", result: undefined });
       return {
-        instance: { ...instance, child: newChild },
+        instance: { ...instance, children: [newChild] },
         yieldReason: "end_turn",
         messages: [{ role: "assistant" as const, content: "I've started the researcher for you!" }],
       };
@@ -300,7 +301,7 @@ describe("spawn continuation", () => {
         // Parent spawns child (tool_use to continue on child)
         const newChild = createInstance(childNode, { query: "quick", result: undefined });
         return {
-          instance: { ...instance, child: newChild },
+          instance: { ...instance, children: [newChild] },
           yieldReason: "tool_use",
           messages: [],
         };
@@ -339,7 +340,7 @@ describe("spawn continuation", () => {
     expect(callCount).toBe(3);
 
     // Child should be removed after cede
-    expect(result.instance.child).toBeUndefined();
+    expect(result.instance.children).toBeUndefined();
 
     // Verify yield reason
     expect(result.yieldReason).toBe("end_turn");
@@ -403,7 +404,7 @@ describe("cede behavior", () => {
     // First step: cede
     expect(steps[0]?.yieldReason).toBe("cede");
     expect(steps[0]?.cedeContent).toBe("Result: done");
-    expect(steps[0]?.instance.child).toBeUndefined(); // Child removed after cede
+    expect(steps[0]?.instance.children).toBeUndefined(); // Child removed after cede
 
     // Second step: parent responds
     expect(steps[1]?.yieldReason).toBe("end_turn");
@@ -481,7 +482,7 @@ describe("cede behavior", () => {
         // Step 1: Parent spawns child
         const newChild = createInstance(childNode, { query: "research", result: undefined });
         return {
-          instance: { ...instance, child: newChild },
+          instance: { ...instance, children: [newChild] },
           yieldReason: "end_turn",
         };
       }
@@ -524,7 +525,7 @@ describe("cede behavior", () => {
     });
     const result1 = await runMachineToCompletion(machine1, "spawn child");
 
-    expect(result1.instance.child).toBeDefined();
+    expect(result1.instance.children).toBeDefined();
     expect(getActiveInstance(result1.instance).node.id).toBe(childNode.id);
 
     // Step 2: Child works
@@ -533,8 +534,8 @@ describe("cede behavior", () => {
     });
     const result2 = await runMachineToCompletion(machine2, "do research");
 
-    expect(result2.instance.child).toBeDefined();
-    const childAfterWork = result2.instance.child as Instance;
+    expect(result2.instance.children).toBeDefined();
+    const childAfterWork = result2.instance.children![0]!;
     expect(childAfterWork.state).toEqual({ query: "research", result: "found stuff" });
 
     // Step 3: Child cedes - use collectSteps to see intermediate cede step
@@ -549,7 +550,7 @@ describe("cede behavior", () => {
     // First step: cede with content
     expect(steps3[0]?.yieldReason).toBe("cede");
     expect(steps3[0]?.cedeContent).toBe("Result: found stuff");
-    expect(steps3[0]?.instance.child).toBeUndefined(); // Child removed
+    expect(steps3[0]?.instance.children).toBeUndefined(); // Child removed
 
     // Final step: parent responds
     const result3 = steps3[1]!;
@@ -611,7 +612,7 @@ describe("cede continuation", () => {
     expect(callCount).toBe(2);
 
     // Child should be removed
-    expect(result.instance.child).toBeUndefined();
+    expect(result.instance.children).toBeUndefined();
 
     // Verify yield reason
     expect(result.yieldReason).toBe("end_turn");

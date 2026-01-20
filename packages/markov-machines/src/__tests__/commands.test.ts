@@ -365,8 +365,9 @@ describe("command with spawn", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(updated.instance.child).toBeDefined();
-    const child = updated.instance.child as Instance;
+    expect(updated.instance.children).toBeDefined();
+    expect(updated.instance.children?.length).toBe(1);
+    const child = updated.instance.children![0]!;
     expect(child.node.id).toBe(childNode.id);
     expect(child.state).toEqual({ query: "test query" });
   });
@@ -418,7 +419,7 @@ describe("command with cede", () => {
     expect(result.success).toBe(true);
     expect(result.value).toEqual({ findings: "found stuff" });
     // Child should be removed after cede
-    expect(updated.instance.child).toBeUndefined();
+    expect(updated.instance.children).toBeUndefined();
   });
 
   it("should error when trying to cede from root", async () => {

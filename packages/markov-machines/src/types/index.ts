@@ -65,6 +65,7 @@ export {
   getInstancePath,
   getAllInstances,
   getActiveLeaves,
+  getChildren,
   getSuspendedInstances,
   findInstanceById,
   createSuspendInfo,

@@ -75,6 +75,7 @@ export function createTransition<S>(
   const config = maybeConfig ?? (configOrFrom as TransitionConfig<S>);
 
   return {
+    type: "code",
     description: config.description,
     arguments: config.arguments,
     execute: (state: S, ctx: TransitionContext) => {

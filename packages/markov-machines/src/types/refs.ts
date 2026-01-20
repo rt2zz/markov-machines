@@ -19,6 +19,8 @@ export interface SerialNode<S = unknown> {
   instructions: string;
   validator: JSONSchema;
   transitions: Record<string, Ref | SerialTransition>;
+  /** Tools as refs only - resolved from charter at deserialization */
+  tools?: Record<string, Ref>;
   /** Optional initial state for this node */
   initialState?: S;
 }
@@ -28,6 +30,7 @@ export interface SerialNode<S = unknown> {
  * References a target node and optionally defines custom arguments.
  */
 export interface SerialTransition {
+  type: "serial";
   description: string;
   node: Ref | SerialNode;
   arguments?: JSONSchema;
@@ -65,7 +68,7 @@ export function isSerialTransition(value: unknown): value is SerialTransition {
   return (
     typeof value === "object" &&
     value !== null &&
-    "description" in value &&
-    "node" in value
+    "type" in value &&
+    (value as SerialTransition).type === "serial"
   );
 }

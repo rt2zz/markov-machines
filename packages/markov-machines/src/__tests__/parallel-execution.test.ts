@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import { createCharter } from "../core/charter.js";
 import { createNode, createPassiveNode } from "../core/node.js";
@@ -317,7 +317,9 @@ describe("parallel execution validation", () => {
 });
 
 describe("passive node must cede", () => {
-  it("should throw error when passive node returns end_turn", async () => {
+  it("should warn when passive node returns end_turn without ceding", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     const standardNode = createNode<StandardState>({
       instructions: "Standard",
       validator: standardStateValidator,
@@ -348,9 +350,18 @@ describe("passive node must cede", () => {
 
     const machine = createMachine(charter, { instance: root });
 
-    await expect(runMachineToCompletion(machine, "test")).rejects.toThrow(
-      /Passive instance .* returned end_turn without ceding/
+    // Should complete without throwing (passive end_turn is ignored with warning)
+    const result = await runMachineToCompletion(machine, "test");
+
+    // Verify warning was logged
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/Passive instance .* returned end_turn without ceding/)
     );
+
+    // Machine should still complete (non-passive leaf's end_turn is respected)
+    expect(result.done).toBe(true);
+
+    warnSpy.mockRestore();
   });
 
   it("should allow passive node to use tool_use (not end_turn)", async () => {
@@ -458,10 +469,11 @@ describe("parallel execution cede handling", () => {
     const result = await runMachineToCompletion(machine, "test");
 
     // After parallel execution, passive child should be removed
-    expect(result.instance.child).toBeDefined();
+    expect(result.instance.children).toBeDefined();
+    expect(result.instance.children?.length).toBe(1);
 
     // Should only have the standard child left
-    const child = result.instance.child as Instance;
+    const child = result.instance.children![0]!;
     expect(child.node.passive).not.toBe(true);
   });
 });

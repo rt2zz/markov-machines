@@ -551,7 +551,7 @@ describe("command with instanceId targeting", () => {
     expect(result.success).toBe(true);
     expect(updatedMachine.instance.state).toEqual({ value: "updated-parent" });
     // Child should be unchanged
-    expect((updatedMachine.instance.child as Instance).state).toEqual({ value: "child" });
+    expect(updatedMachine.instance.children?.[0]?.state).toEqual({ value: "child" });
   });
 });
 

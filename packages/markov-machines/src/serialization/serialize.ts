@@ -40,6 +40,7 @@ export function serializeNode<S>(
     // Convert SerialNode to a SerialTransition wrapper if needed
     if (!isRef(serialized)) {
       transitions[name] = {
+        type: "serial",
         description: "Transition",
         node: serialized,
       };
@@ -106,21 +107,17 @@ export function serializeInstance(
 ): SerializedInstance {
   const serializedNode = serializeNode(instance.node, charter);
 
-  // Handle array or single child
-  let child: SerializedInstance | SerializedInstance[] | undefined;
-  if (instance.child) {
-    if (Array.isArray(instance.child)) {
-      child = instance.child.map((c) => serializeInstance(c, charter));
-    } else {
-      child = serializeInstance(instance.child, charter);
-    }
+  // Serialize children
+  let children: SerializedInstance[] | undefined;
+  if (instance.children && instance.children.length > 0) {
+    children = instance.children.map((c) => serializeInstance(c, charter));
   }
 
   return {
     id: instance.id,
     node: serializedNode,
     state: instance.state,
-    child,
+    children,
     ...(instance.packStates ? { packStates: instance.packStates } : {}),
     ...(instance.suspended ? {
       suspended: {
