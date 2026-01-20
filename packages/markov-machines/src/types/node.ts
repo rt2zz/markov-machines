@@ -40,14 +40,39 @@ export interface NodeConfig<S = unknown, M = never> {
   commands?: Record<string, AnyCommandDefinition<S>>;
   /** Optional initial state for this node */
   initialState?: S;
-  /** Packs this node uses */
-  // Packs have their own state types independent of node state, requiring `any`
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  packs?: Pack<any>[];
   /** Per-node executor configuration (overrides executor defaults) */
   executorConfig?: StandardNodeConfig;
   /** Structured output configuration */
   output?: OutputConfig<M>;
+  /** Packs this node uses */
+  packs?: Pack<unknown>[];
+}
+
+/**
+ * Passive node configuration for createPassiveNode.
+ * Passive nodes execute in parallel with the main flow but:
+ * - Don't receive user input
+ * - Can't access packs
+ * - Must cede to return control (end_turn throws an error)
+ * @typeParam S - The node's state type.
+ * @typeParam M - The output message type (never = no structured output).
+ */
+export interface PassiveNodeConfig<S = unknown, M = never> {
+  instructions: string;
+  /** Node tools (state access via context) */
+  tools?: Record<string, NodeToolEntry<S>>;
+  validator: z.ZodType<S>;
+  /** Transitions see node state S */
+  transitions?: Record<string, Transition<S>>;
+  /** Commands - user-callable methods that bypass LLM inference */
+  commands?: Record<string, AnyCommandDefinition<S>>;
+  /** Optional initial state for this node */
+  initialState?: S;
+  /** Per-node executor configuration (overrides executor defaults) */
+  executorConfig?: StandardNodeConfig;
+  /** Structured output configuration */
+  output?: OutputConfig<M>;
+  // packs intentionally omitted - passive nodes can't access packs
 }
 
 /**
@@ -70,14 +95,28 @@ export interface Node<S = unknown, M = never> {
   commands?: Record<string, AnyCommandDefinition<S>>;
   /** Optional initial state for this node */
   initialState?: S;
-  /** Packs this node uses */
-  // Packs have their own state types independent of node state, requiring `any`
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  packs?: Pack<any>[];
   /** Per-node executor configuration (overrides executor defaults) */
   executorConfig?: StandardNodeConfig;
   /** Structured output configuration */
   output?: OutputConfig<M>;
+  /** Packs this node uses (not available on passive nodes) */
+  packs?: Pack<unknown>[];
+  /** Whether this is a passive node */
+  passive?: boolean;
+}
+
+/**
+ * Passive runtime node - extends Node with passive: true.
+ * Passive nodes execute in parallel with the main flow but:
+ * - Don't receive user input
+ * - Can't access packs (enforced at creation time)
+ * - Must cede to return control (end_turn throws an error)
+ * @typeParam S - The node's state type.
+ * @typeParam M - The output message type (never = no structured output).
+ */
+export interface PassiveNode<S = unknown, M = never> extends Node<S, M> {
+  /** Mark as passive node - enables parallel execution but disables pack access */
+  passive: true;
 }
 
 /**
@@ -93,4 +132,11 @@ export function isNode<S, M = never>(value: unknown): value is Node<S, M> {
     "validator" in value &&
     "transitions" in value
   );
+}
+
+/**
+ * Check if a node is a passive node.
+ */
+export function isPassiveNode<S, M = never>(node: Node<S, M>): node is PassiveNode<S, M> {
+  return node.passive === true;
 }

@@ -3,7 +3,7 @@ import type { Instance } from "../types/instance.js";
 import type { AnyToolDefinition, AnthropicBuiltinTool } from "../types/tools.js";
 import type { Transition } from "../types/transitions.js";
 import type { AnyPackToolDefinition } from "../types/pack.js";
-import type { NodeToolEntry } from "../types/node.js";
+import type { Node, NodeToolEntry } from "../types/node.js";
 import { isRef } from "../types/refs.js";
 
 /**
@@ -51,11 +51,15 @@ export function resolveTool(
     return { tool: charterTool, owner: "charter" };
   }
 
-  // Finally check pack tools (for packs on current node)
-  for (const pack of instance.node.packs ?? []) {
-    const packTool = pack.tools[toolName];
-    if (packTool) {
-      return { tool: packTool, owner: { pack: pack.name } };
+  // Finally check pack tools (for packs on current node, only for non-passive nodes)
+  // Passive nodes don't have access to packs
+  if (!instance.node.passive) {
+    const standardNode = instance.node as Node<unknown>;
+    for (const pack of standardNode.packs ?? []) {
+      const packTool = pack.tools[toolName];
+      if (packTool) {
+        return { tool: packTool, owner: { pack: pack.name } };
+      }
     }
   }
 

@@ -65,31 +65,55 @@ export function isOutputBlock<M>(
 }
 
 /**
+ * Metadata attached to messages for attribution and tracking.
+ */
+export interface MessageMetadata {
+  /** ID of the instance that generated this message */
+  sourceInstanceId?: string;
+}
+
+/**
  * Message in the conversation history.
- * Matches Anthropic SDK format.
+ * Matches Anthropic SDK format with optional metadata.
  * @typeParam M - The application message type for OutputBlock (defaults to unknown).
  */
 export interface Message<M = unknown> {
   role: "user" | "assistant";
   content: string | ContentBlock<M>[];
+  /** Optional metadata for message attribution */
+  metadata?: MessageMetadata;
 }
 
 /**
  * Create a user message.
+ * @param content - Message content (string or content blocks)
+ * @param sourceInstanceId - Optional ID of the instance that generated this message
  */
 export function userMessage<M = unknown>(
   content: string | ContentBlock<M>[],
+  sourceInstanceId?: string,
 ): Message<M> {
-  return { role: "user", content };
+  return {
+    role: "user",
+    content,
+    ...(sourceInstanceId && { metadata: { sourceInstanceId } }),
+  };
 }
 
 /**
  * Create an assistant message.
+ * @param content - Message content (string or content blocks)
+ * @param sourceInstanceId - Optional ID of the instance that generated this message
  */
 export function assistantMessage<M = unknown>(
   content: string | ContentBlock<M>[],
+  sourceInstanceId?: string,
 ): Message<M> {
-  return { role: "assistant", content };
+  return {
+    role: "assistant",
+    content,
+    ...(sourceInstanceId && { metadata: { sourceInstanceId } }),
+  };
 }
 
 /**

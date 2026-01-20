@@ -1,4 +1,5 @@
 import type { AnyToolDefinition, ToolContext } from "../types/tools.js";
+import type { Message } from "../types/messages.js";
 import { isToolReply } from "../types/tools.js";
 
 /**
@@ -13,12 +14,20 @@ export interface ToolExecutionResult {
 
 /**
  * Execute a tool with the given input and state.
+ * @param tool - The tool to execute
+ * @param input - The input to pass to the tool
+ * @param state - The current state
+ * @param onStateUpdate - Callback for state updates
+ * @param instanceId - ID of the instance executing the tool
+ * @param history - Conversation history for getInstanceMessages
  */
 export async function executeTool<S>(
   tool: AnyToolDefinition<S>,
   input: unknown,
   state: S,
   onStateUpdate: (patch: Partial<S>) => void,
+  instanceId: string,
+  history: Message<unknown>[],
 ): Promise<ToolExecutionResult> {
   try {
     // Validate input
@@ -30,10 +39,19 @@ export async function executeTool<S>(
       };
     }
 
+    // Create getInstanceMessages function that filters by sourceInstanceId
+    const getInstanceMessages = (): Message[] => {
+      return history.filter(
+        (msg) => msg.metadata?.sourceInstanceId === instanceId
+      );
+    };
+
     // Create context
     const ctx: ToolContext<S> = {
       state,
       updateState: onStateUpdate,
+      instanceId,
+      getInstanceMessages,
     };
 
     // Execute tool

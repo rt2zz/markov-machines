@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   createNode,
+  cede,
   type AnthropicBuiltinTool,
   type CodeTransition,
 } from "markov-machines";
@@ -57,11 +58,11 @@ Be thorough but focused. Prioritize findings that match the user's preferences f
   transitions: {
     cedeResults: {
       description: "Return findings to the main assistant. Use when research is complete or you need user input.",
-      execute: async (state, _ctx, { cede }) => {
-        return cede({
-          query: state.query,
-          findings: state.findings,
-        });
+      execute: (state) => {
+        const findingsSummary = state.findings.length > 0
+          ? `Research findings for "${state.query}":\n${state.findings.map((f, i) => `${i + 1}. ${f}`).join("\n")}`
+          : `Research complete for "${state.query}" - no findings recorded.`;
+        return cede(findingsSummary);
       },
     } as CodeTransition<ResearcherState>,
   },

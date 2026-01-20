@@ -62,10 +62,11 @@ export class StandardExecutor implements Executor<unknown> {
     options?: RunOptions<unknown>,
   ): Promise<RunResult<unknown>> {
     let currentState = instance.state;
-    let currentNode = instance.node;
+    let currentNode: Node<unknown> = instance.node;
     let currentChildren = instance.child;
     let currentExecutorConfig = instance.executorConfig;
     const newMessages: Message[] = [];
+    const isPassive = instance.node.passive === true;
 
     // Get pack states from root instance (first ancestor or current instance)
     const rootInstance = ancestors[0] ?? instance;
@@ -83,7 +84,7 @@ export class StandardExecutor implements Executor<unknown> {
 
     // Add current user input (only if non-empty)
     if (input) {
-      newMessages.push(userMessage(input));
+      newMessages.push(userMessage(input, instance.id));
       conversationHistory.push({ role: "user", content: input });
     }
 
@@ -140,9 +141,9 @@ export class StandardExecutor implements Executor<unknown> {
     // Build structured output format if node has output config (beta feature)
     let outputFormat: { type: "json_schema"; json_schema: { name: string; schema: unknown } } | undefined;
     if (currentNode.output?.schema) {
-      const jsonSchema = z.toJSONSchema(currentNode.output.schema, {
+      const jsonSchema: Record<string, unknown> = z.toJSONSchema(currentNode.output.schema, {
         target: "openApi3",
-      });
+      }) as Record<string, unknown>;
       outputFormat = {
         type: "json_schema",
         json_schema: {
@@ -193,12 +194,12 @@ export class StandardExecutor implements Executor<unknown> {
       });
     }
 
-    const assistantMsg = assistantMessage(assistantContent);
+    const assistantMsg = assistantMessage(assistantContent, instance.id);
     newMessages.push(assistantMsg);
 
     // Determine yield reason and process accordingly
     let yieldReason: "end_turn" | "tool_use" | "max_tokens" | "cede" = "end_turn";
-    let cedePayload: unknown = undefined;
+    let cedeContent: string | Message<unknown>[] | undefined = undefined;
 
     if (response.stop_reason === "max_tokens") {
       yieldReason = "max_tokens";
@@ -219,6 +220,7 @@ export class StandardExecutor implements Executor<unknown> {
           packStates,
           currentState,
           currentNode,
+          history: options?.history,
         },
         toolCalls,
       );
@@ -229,7 +231,7 @@ export class StandardExecutor implements Executor<unknown> {
 
       // Add tool results to messages
       if (toolResult.toolResults.length > 0) {
-        const toolResultMsg = userMessage(toolResult.toolResults);
+        const toolResultMsg = userMessage(toolResult.toolResults, instance.id);
         newMessages.push(toolResultMsg);
       }
 
@@ -261,7 +263,7 @@ export class StandardExecutor implements Executor<unknown> {
         currentState = outcome.state;
         currentChildren = outcome.children;
         yieldReason = outcome.yieldReason;
-        cedePayload = outcome.cedePayload;
+        cedeContent = outcome.cedeContent;
         if (outcome.executorConfig !== undefined) {
           currentExecutorConfig = outcome.executorConfig;
         }
@@ -287,8 +289,9 @@ export class StandardExecutor implements Executor<unknown> {
       instance: updatedInstance,
       messages: newMessages,
       yieldReason,
-      cedePayload,
-      packStates: Object.keys(packStates).length > 0 ? packStates : undefined,
+      cedeContent,
+      // Passive instances don't update pack states
+      packStates: !isPassive && Object.keys(packStates).length > 0 ? packStates : undefined,
     };
   }
 

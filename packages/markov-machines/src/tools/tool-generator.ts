@@ -28,6 +28,7 @@ type ToolSource =
  * Generate Anthropic tool definitions for a node.
  * Includes: updateState, transition tools, current node tools, ancestor tools, and charter tools.
  * Child tools shadow parent tools (closest match wins).
+ * Pack tools are only included for non-passive nodes.
  *
  * @throws Error if a tool name from a lower-priority scope conflicts with a higher-priority scope
  */
@@ -52,11 +53,11 @@ export function generateToolDefinitions<S>(
   }
 
   // 1. Add updateState tool
-  const patchValidator =
+  const patchValidator: z.ZodTypeAny =
     typeof (node.validator as { partial?: () => z.ZodTypeAny }).partial === "function"
       ? (node.validator as z.ZodObject<Record<string, z.ZodTypeAny>>).partial()
       : node.validator;
-  const stateSchema = z.toJSONSchema(patchValidator, { target: "openapi-3.0" });
+  const stateSchema: Record<string, unknown> = z.toJSONSchema(patchValidator, { target: "openapi-3.0" }) as Record<string, unknown>;
   tools.push({
     name: "updateState",
     description:
@@ -155,9 +156,9 @@ export function generateToolDefinitions<S>(
       continue;
     }
 
-    const inputSchema = z.toJSONSchema(tool.inputSchema, {
+    const inputSchema: Record<string, unknown> = z.toJSONSchema(tool.inputSchema, {
       target: "openapi-3.0",
-    });
+    }) as Record<string, unknown>;
     tools.push({
       name,
       description: tool.description,
@@ -185,9 +186,9 @@ export function generateToolDefinitions<S>(
         continue;
       }
 
-      const inputSchema = z.toJSONSchema(tool.inputSchema, {
+      const inputSchema: Record<string, unknown> = z.toJSONSchema(tool.inputSchema, {
         target: "openapi-3.0",
-      });
+      }) as Record<string, unknown>;
       tools.push({
         name,
         description: tool.description,
@@ -202,9 +203,9 @@ export function generateToolDefinitions<S>(
     // Skip if higher-priority scope already has this tool
     if (toolSources.has(name)) continue;
 
-    const inputSchema = z.toJSONSchema(tool.inputSchema, {
+    const inputSchema: Record<string, unknown> = z.toJSONSchema(tool.inputSchema, {
       target: "openapi-3.0",
-    });
+    }) as Record<string, unknown>;
     tools.push({
       name,
       description: tool.description,
@@ -213,21 +214,25 @@ export function generateToolDefinitions<S>(
     toolSources.set(name, "charter");
   }
 
-  // 6. Add pack tools (lowest priority - only for packs on current node)
-  for (const pack of node.packs ?? []) {
-    for (const [name, tool] of Object.entries(pack.tools)) {
-      // Skip if higher-priority scope already has this tool
-      if (toolSources.has(name)) continue;
+  // 6. Add pack tools (lowest priority - only for packs on current node, and only for non-passive nodes)
+  // Passive nodes don't have access to packs
+  if (!node.passive) {
+    const standardNode = node as Node<S>;
+    for (const pack of standardNode.packs ?? []) {
+      for (const [name, tool] of Object.entries(pack.tools)) {
+        // Skip if higher-priority scope already has this tool
+        if (toolSources.has(name)) continue;
 
-      const inputSchema = z.toJSONSchema(tool.inputSchema, {
-        target: "openapi-3.0",
-      });
-      tools.push({
-        name,
-        description: tool.description,
-        input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
-      });
-      toolSources.set(name, `pack:${pack.name}` as ToolSource);
+        const inputSchema: Record<string, unknown> = z.toJSONSchema(tool.inputSchema, {
+          target: "openapi-3.0",
+        }) as Record<string, unknown>;
+        tools.push({
+          name,
+          description: tool.description,
+          input_schema: inputSchema as AnthropicToolDefinition["input_schema"],
+        });
+        toolSources.set(name, `pack:${pack.name}` as ToolSource);
+      }
     }
   }
 
@@ -251,7 +256,7 @@ function getTransitionArgsSchema<S>(
   transition: Transition<S>,
 ): Record<string, unknown> {
   if (isCodeTransition(transition) && transition.arguments) {
-    const schema = z.toJSONSchema(transition.arguments, { target: "openapi-3.0" });
+    const schema: Record<string, unknown> = z.toJSONSchema(transition.arguments, { target: "openapi-3.0" }) as Record<string, unknown>;
     // Extract just the properties
     if (typeof schema === "object" && "properties" in schema) {
       return (schema as { properties: Record<string, unknown> }).properties;

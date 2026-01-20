@@ -31,7 +31,7 @@ export function serializeNode<S>(
   }
 
   // Serialize the validator to JSON Schema
-  const validator = z.toJSONSchema(node.validator, { target: "draft-2020-12" });
+  const validator: Record<string, unknown> = z.toJSONSchema(node.validator, { target: "draft-2020-12" }) as Record<string, unknown>;
 
   // Serialize transitions
   const transitions: Record<string, Ref | SerialTransition> = {};

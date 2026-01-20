@@ -35,8 +35,7 @@ export type NodeCommands<N> = N extends { commands: infer C }
  * Contains instructions, validator schema, and command metadata.
  * Sent over the wire to clients.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface DryClientNode<N extends Node<any> = Node> {
+export interface DryClientNode<N extends Node = Node> {
   instructions: string;
   validator: JSONSchema;
   commands: Record<string, CommandMeta>;
@@ -46,8 +45,7 @@ export interface DryClientNode<N extends Node<any> = Node> {
  * Hydrated node with fully typed callable commands.
  * Created on the client by hydrating a DryClientNode.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface ClientNode<N extends Node<any> = Node> {
+export interface ClientNode<N extends Node = Node> {
   instructions: string;
   validator: JSONSchema;
   commands: NodeCommands<N>;
@@ -58,8 +56,7 @@ export interface ClientNode<N extends Node<any> = Node> {
  * Contains id, state, packStates, and a DryClientNode.
  * Sent over the wire to clients.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface DryClientInstance<N extends Node<any> = Node> {
+export interface DryClientInstance<N extends Node = Node> {
   id: string;
   state: NodeState<N>;
   packStates?: Record<string, unknown>;
@@ -70,8 +67,7 @@ export interface DryClientInstance<N extends Node<any> = Node> {
  * Hydrated instance with fully typed commands.
  * Created on the client by hydrating a DryClientInstance.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface ClientInstance<N extends Node<any> = Node> {
+export interface ClientInstance<N extends Node = Node> {
   id: string;
   state: NodeState<N>;
   packStates?: Record<string, unknown>;

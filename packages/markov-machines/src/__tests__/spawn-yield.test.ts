@@ -5,10 +5,12 @@ import { createNode } from "../core/node.js";
 import { createInstance, getActiveInstance, getInstancePath } from "../types/instance.js";
 import { createMachine } from "../core/machine.js";
 import { runMachine, runMachineToCompletion } from "../core/run.js";
+import { spawn } from "../helpers/cede-spawn.js";
 import type { Executor, RunResult, RunOptions, MachineStep } from "../executor/types.js";
 import type { Charter } from "../types/charter.js";
 import type { Instance } from "../types/instance.js";
 import type { CodeTransition } from "../types/transitions.js";
+import type { Message } from "../types/messages.js";
 
 /**
  * Helper to collect all steps from the async generator.
@@ -49,7 +51,7 @@ function createMockExecutor(
         instance: result.instance ?? instance,
         messages: result.messages ?? [],
         yieldReason: result.yieldReason ?? "end_turn",
-        cedePayload: result.cedePayload,
+        cedeContent: result.cedeContent,
         packStates: result.packStates,
       };
     },
@@ -80,7 +82,7 @@ describe("spawn behavior", () => {
     // Spawn transition
     const spawnChild: CodeTransition<ParentState> = {
       description: "Spawn a child",
-      execute: (_state, _ctx, { spawn }) => {
+      execute: () => {
         return spawn(childNode, { query: "test query", result: undefined });
       },
     };
@@ -309,7 +311,7 @@ describe("spawn continuation", () => {
         return {
           instance,
           yieldReason: "cede",
-          cedePayload: { done: true },
+          cedeContent: "Task completed",
           messages: [],
         };
       }
@@ -367,7 +369,7 @@ describe("cede behavior", () => {
         return {
           instance,
           yieldReason: "cede",
-          cedePayload: { result: "done" },
+          cedeContent: "Result: done",
           messages: [],
         };
       }
@@ -400,7 +402,7 @@ describe("cede behavior", () => {
 
     // First step: cede
     expect(steps[0]?.yieldReason).toBe("cede");
-    expect(steps[0]?.cedePayload).toEqual({ result: "done" });
+    expect(steps[0]?.cedeContent).toBe("Result: done");
     expect(steps[0]?.instance.child).toBeUndefined(); // Child removed after cede
 
     // Second step: parent responds
@@ -431,7 +433,7 @@ describe("cede behavior", () => {
         return {
           instance,
           yieldReason: "cede",
-          cedePayload: { findings: ["item1", "item2"], query: "test" },
+          cedeContent: "Findings: item1, item2 (query: test)",
           messages: [],
         };
       }
@@ -454,8 +456,8 @@ describe("cede behavior", () => {
     const machine = createMachine(charter, { instance: parentInstance });
     const steps = await collectSteps(runMachine(machine, "complete"));
 
-    // Cede payload is on the cede step
-    expect(steps[0]?.cedePayload).toEqual({ findings: ["item1", "item2"], query: "test" });
+    // Cede content is on the cede step
+    expect(steps[0]?.cedeContent).toBe("Findings: item1, item2 (query: test)");
   });
 
   it("should work with nested spawn/cede cycle", async () => {
@@ -497,7 +499,7 @@ describe("cede behavior", () => {
         return {
           instance,
           yieldReason: "cede",
-          cedePayload: { result: "found stuff" },
+          cedeContent: "Result: found stuff",
           messages: [],
         };
       }
@@ -544,9 +546,9 @@ describe("cede behavior", () => {
     // Should have 2 steps: cede then parent response
     expect(steps3.length).toBe(2);
 
-    // First step: cede with payload
+    // First step: cede with content
     expect(steps3[0]?.yieldReason).toBe("cede");
-    expect(steps3[0]?.cedePayload).toEqual({ result: "found stuff" });
+    expect(steps3[0]?.cedeContent).toBe("Result: found stuff");
     expect(steps3[0]?.instance.child).toBeUndefined(); // Child removed
 
     // Final step: parent responds
@@ -579,12 +581,12 @@ describe("cede continuation", () => {
         return {
           instance,
           yieldReason: "cede",
-          cedePayload: { result: "findings" },
+          cedeContent: "Result: findings",
           messages: [],
         };
       }
 
-      // Second call: parent responds (after receiving cede payload)
+      // Second call: parent responds (after receiving cede content)
       return {
         instance,
         yieldReason: "end_turn",
@@ -636,7 +638,7 @@ describe("cede continuation", () => {
         return {
           instance,
           yieldReason: "cede",
-          cedePayload: { result: "findings" },
+          cedeContent: "Result: findings",
           messages: [{ role: "assistant" as const, content: "I'm done with my research!" }],
         };
       }
@@ -665,7 +667,7 @@ describe("cede continuation", () => {
 
     // Cede step includes the text response
     expect(steps[0]?.yieldReason).toBe("cede");
-    expect(steps[0]?.cedePayload).toEqual({ result: "findings" });
+    expect(steps[0]?.cedeContent).toBe("Result: findings");
     expect(steps[0]?.done).toBe(false); // Cede always continues
 
     // Parent responds
@@ -701,7 +703,7 @@ describe("cede continuation", () => {
       return {
         instance,
         yieldReason: "cede",
-        cedePayload: {},
+        cedeContent: "Done",
         messages: [],
       };
     });
@@ -750,7 +752,7 @@ describe("cede continuation", () => {
         return {
           instance,
           yieldReason: "cede",
-          cedePayload: { findings: ["item1", "item2"] },
+          cedeContent: "Findings: item1, item2",
           messages: [{ role: "assistant" as const, content: "Calling cede..." }],
         };
       }
@@ -777,9 +779,9 @@ describe("cede continuation", () => {
     // Should have 2 steps: cede then parent response
     expect(steps.length).toBe(2);
 
-    // First step: cede with payload
+    // First step: cede with content
     expect(steps[0]?.yieldReason).toBe("cede");
-    expect(steps[0]?.cedePayload).toEqual({ findings: ["item1", "item2"] });
+    expect(steps[0]?.cedeContent).toBe("Findings: item1, item2");
     expect(steps[0]?.messages).toEqual([{ role: "assistant", content: "Calling cede..." }]);
     expect(steps[0]?.done).toBe(false);
 

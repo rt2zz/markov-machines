@@ -2,6 +2,12 @@ import type { Charter } from "../types/charter.js";
 import type { Instance } from "../types/instance.js";
 import type { Message } from "../types/messages.js";
 
+
+/**
+ * Reason why the executor yielded control.
+ */
+export type YieldReason = "end_turn" | "tool_use" | "max_tokens" | "cede";
+
 /**
  * Options for executor run.
  * @typeParam AppMessage - The application message type for structured outputs (defaults to unknown).
@@ -28,9 +34,9 @@ export interface RunResult<AppMessage = unknown> {
   /** New messages from this turn */
   messages: Message<AppMessage>[];
   /** Why the run yielded */
-  yieldReason: "end_turn" | "tool_use" | "max_tokens" | "cede";
-  /** Payload from cede (only set when yieldReason is "cede") */
-  cedePayload?: unknown;
+  yieldReason: YieldReason;
+  /** Content from cede - string or Message[] (only set when yieldReason is "cede") */
+  cedeContent?: string | Message<AppMessage>[];
   /** Updated pack states (to be applied to root instance) */
   packStates?: Record<string, unknown>;
 }
@@ -49,8 +55,8 @@ export interface MachineStep<AppMessage = unknown> {
   yieldReason: "end_turn" | "tool_use" | "cede" | "max_tokens" | "command";
   /** True if this is the final step (has response or hit limit) */
   done: boolean;
-  /** Cede payload if yieldReason is "cede" */
-  cedePayload?: unknown;
+  /** Cede content if yieldReason is "cede" - string or Message[] */
+  cedeContent?: string | Message<AppMessage>[];
 }
 
 /**

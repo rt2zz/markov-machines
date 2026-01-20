@@ -2,7 +2,8 @@
 export { createCharter } from "./src/core/charter.js";
 export { createNode } from "./src/core/node.js";
 export { createMachine } from "./src/core/machine.js";
-export { createTransition, createHelpers } from "./src/core/transition.js";
+export { createTransition } from "./src/core/transition.js";
+export { cede, spawn } from "./src/helpers/cede-spawn.js";
 export type { TransitionConfig } from "./src/core/transition.js";
 export { runMachine, runMachineToCompletion } from "./src/core/run.js";
 export type { RunMachineInput } from "./src/core/run.js";
@@ -67,7 +68,6 @@ export type {
   SpawnTarget,
   SpawnOptions,
   TransitionToOptions,
-  TransitionHelpers,
   // Tools
   ToolContext,
   ToolDefinition,
@@ -77,11 +77,13 @@ export type {
   ToolReply,
   // Messages
   Message,
+  MessageMetadata,
   ContentBlock,
   TextBlock,
   ToolUseBlock,
   ToolResultBlock,
   ThinkingBlock,
+  OutputBlock,
   // Pack
   Pack,
   PackConfig,

@@ -4,26 +4,24 @@ import type { StandardNodeConfig } from "../executor/types.js";
 
 /**
  * Helper to extract state type from a Node type.
+ * Constrained to Node to avoid unbounded type inference.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type NodeState<N> = N extends Node<infer S> ? S : unknown;
+export type NodeState<N extends Node> = N extends Node<infer S> ? S : unknown;
 
 /**
  * Runtime node instance with state and optional children.
  * Forms a tree structure where nodes can spawn children.
  * @typeParam N - The node type (full Node<S> type for type inference).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface Instance<N extends Node<any> = Node> {
+export interface Instance<N extends Node = Node> {
   /** Unique identifier for this instance */
   id: string;
   /** The node definition */
   node: N;
   /** Current state for this node */
   state: NodeState<N>;
-  /** Optional child instance(s) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  child?: Instance<any> | Instance<any>[];
+  /** Optional child instance(s) - uses Instance (not Instance<any>) to avoid type explosion */
+  child?: Instance | Instance[];
   /** Pack states (only on root instance, shared across all nodes) */
   packStates?: Record<string, unknown>;
   /** Effective executor config for this instance (override or from node) */
@@ -33,12 +31,10 @@ export interface Instance<N extends Node<any> = Node> {
 /**
  * Create a new instance with auto-generated ID.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createInstance<N extends Node<any>>(
+export function createInstance<N extends Node>(
   node: N,
   state: NodeState<N>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  child?: Instance<any> | Instance<any>[],
+  child?: Instance | Instance[],
   packStates?: Record<string, unknown>,
   executorConfig?: StandardNodeConfig,
 ): Instance<N> {
@@ -55,8 +51,7 @@ export function createInstance<N extends Node<any>>(
 /**
  * Check if a value is an Instance.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function isInstance<N extends Node<any> = Node>(value: unknown): value is Instance<N> {
+export function isInstance<N extends Node = Node>(value: unknown): value is Instance<N> {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -64,6 +59,13 @@ export function isInstance<N extends Node<any> = Node>(value: unknown): value is
     "node" in value &&
     "state" in value
   );
+}
+
+/**
+ * Check if an instance is passive.
+ */
+export function isPassiveInstance(instance: Instance): boolean {
+  return instance.node.passive === true;
 }
 
 /**
@@ -145,4 +147,47 @@ export function getAllInstances(instance: Instance, maxDepth = 100): Instance[] 
   }
 
   return traverse(instance, 0);
+}
+
+/**
+ * Information about an active leaf instance for parallel execution.
+ */
+export interface ActiveLeafInfo {
+  /** Path from root to leaf (inclusive) */
+  path: Instance[];
+  /** Index path for tree updates (e.g., [0, 2] = root.child[0].child[2]) */
+  leafIndex: number[];
+  /** Whether this is a passive instance */
+  isPassive: boolean;
+}
+
+/**
+ * Get all active leaf instances in the tree.
+ * For parallel execution, finds all leaves that should execute.
+ *
+ * @param instance - The root instance
+ * @returns Array of ActiveLeafInfo for each leaf
+ */
+export function getActiveLeaves(instance: Instance): ActiveLeafInfo[] {
+  const results: ActiveLeafInfo[] = [];
+
+  function traverse(inst: Instance, path: Instance[], indices: number[]): void {
+    const currentPath = [...path, inst];
+
+    if (!inst.child) {
+      // Leaf node - include it
+      results.push({
+        path: currentPath,
+        leafIndex: indices,
+        isPassive: isPassiveInstance(inst),
+      });
+      return;
+    }
+
+    const children = Array.isArray(inst.child) ? inst.child : [inst.child];
+    children.forEach((child, i) => traverse(child, currentPath, [...indices, i]));
+  }
+
+  traverse(instance, [], []);
+  return results;
 }

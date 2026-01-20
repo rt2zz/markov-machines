@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { Node } from "./node.js";
+import type { Message } from "./messages.js";
 import type {
   CedeResult,
   SpawnResult,
@@ -17,8 +18,8 @@ export interface CommandContext<S = unknown> {
   state: S;
   /** Update state with a partial patch */
   updateState: (patch: Partial<S>) => void;
-  /** Cede control back to parent with optional payload */
-  cede: <P = unknown>(payload?: P) => CedeResult<P>;
+  /** Cede control back to parent with optional content (string or Message[]) */
+  cede: <M = unknown>(content?: string | Message<M>[]) => CedeResult<M>;
   /** Spawn one or more child instances */
   spawn: <T = unknown>(
     nodeOrTargets: Node<T> | SpawnTarget<T>[],

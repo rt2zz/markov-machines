@@ -16,8 +16,7 @@ import type { JSONSchema } from "../types/refs.js";
  * Create a DryClientNode from a Node.
  * Extracts instructions, validator (as JSON Schema), and command metadata.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createDryClientNode<N extends Node<any>>(
+export function createDryClientNode<N extends Node>(
   node: N,
 ): DryClientNode<N> {
   // Convert validator to JSON Schema
@@ -47,8 +46,7 @@ export function createDryClientNode<N extends Node<any>>(
  * Create a DryClientInstance from a full Instance.
  * Extracts id, state, packStates, and converts node to DryClientNode.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createDryClientInstance<N extends Node<any>>(
+export function createDryClientInstance<N extends Node>(
   instance: Instance<N>,
 ): DryClientInstance<N> {
   return {
@@ -63,8 +61,7 @@ export function createDryClientInstance<N extends Node<any>>(
  * Hydrate a DryClientNode into a ClientNode.
  * Converts command metadata into callable functions that return Command objects.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function hydrateClientNode<N extends Node<any>>(
+export function hydrateClientNode<N extends Node>(
   dry: DryClientNode<N>,
 ): ClientNode<N> {
   // Create callable command functions from metadata
@@ -88,8 +85,7 @@ export function hydrateClientNode<N extends Node<any>>(
  * Hydrate a DryClientInstance into a ClientInstance.
  * Converts command metadata into callable functions with full type safety.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function hydrateClientInstance<N extends Node<any>>(
+export function hydrateClientInstance<N extends Node>(
   dry: DryClientInstance<N>,
 ): ClientInstance<N> {
   return {

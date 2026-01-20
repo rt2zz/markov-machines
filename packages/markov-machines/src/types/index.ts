@@ -26,7 +26,6 @@ export type {
   SpawnTarget,
   SpawnOptions,
   TransitionToOptions,
-  TransitionHelpers,
 } from "./transitions.js";
 export {
   transitionTo,
@@ -43,17 +42,26 @@ export type { StateUpdateResult } from "./state.js";
 export { deepMerge } from "./state.js";
 
 // Node
-export type { Node, NodeConfig, NodeToolEntry, OutputConfig } from "./node.js";
-export { isNode } from "./node.js";
+export type {
+  Node,
+  NodeConfig,
+  NodeToolEntry,
+  OutputConfig,
+  PassiveNode,
+  PassiveNodeConfig,
+} from "./node.js";
+export { isNode, isPassiveNode } from "./node.js";
 
 // Instance
-export type { Instance, NodeState } from "./instance.js";
+export type { Instance, NodeState, ActiveLeafInfo } from "./instance.js";
 export {
   createInstance,
   isInstance,
+  isPassiveInstance,
   getActiveInstance,
   getInstancePath,
   getAllInstances,
+  getActiveLeaves,
 } from "./instance.js";
 
 // Charter
@@ -62,6 +70,7 @@ export type { Charter, CharterConfig } from "./charter.js";
 // Messages
 export type {
   Message,
+  MessageMetadata,
   ContentBlock,
   TextBlock,
   ToolUseBlock,
