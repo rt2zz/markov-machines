@@ -1,11 +1,10 @@
 import { z } from "zod";
 import {
-  createNode,
+  createTransition,
+  createWorkerNode,
   cede,
   type AnthropicBuiltinTool,
-  type CodeTransition,
 } from "markov-machines";
-import { guidancePack } from "../packs/guidance";
 
 /**
  * Product researcher node - researches products using web search.
@@ -15,6 +14,7 @@ import { guidancePack } from "../packs/guidance";
 const researcherStateValidator = z.object({
   query: z.string(),
   findings: z.array(z.string()),
+  guidance: z.string().optional(),
 });
 
 export type ResearcherState = z.infer<typeof researcherStateValidator>;
@@ -26,18 +26,18 @@ const webSearchTool: AnthropicBuiltinTool = {
   builtinType: "web_search_20250305",
 };
 
-export const productResearcherNode = createNode<ResearcherState>({
+export const productResearcherNode = createWorkerNode<ResearcherState>({
   instructions: `You are a product research assistant. Research the product specified in your query using web search.
 
 Your job:
 1. Use web_search to find information about products matching the query
 2. Look for options, features, prices, reviews, and comparisons
 3. Use recordFinding to save important findings as you go
-4. Check the guidance pack for user preferences (materials, quality, budget, etc.)
+4. If guidance is provided in state.guidance, use it as the user's preferences (materials, quality, budget, etc.)
 
 When you have gathered enough information OR need clarification from the user, use cedeResults to return your findings to the main assistant.
 
-Be thorough but focused. Prioritize findings that match the user's preferences from the guidance pack.`,
+Be thorough but focused. Prioritize findings that match the user's preferences.`,
   validator: researcherStateValidator,
   tools: {
     web_search: webSearchTool,
@@ -56,7 +56,7 @@ Be thorough but focused. Prioritize findings that match the user's preferences f
     },
   },
   transitions: {
-    cedeResults: {
+    cedeResults: createTransition<ResearcherState>({
       description: "Return findings to the main assistant. Use when research is complete or you need user input.",
       execute: (state) => {
         const findingsSummary = state.findings.length > 0
@@ -64,8 +64,7 @@ Be thorough but focused. Prioritize findings that match the user's preferences f
           : `Research complete for "${state.query}" - no findings recorded.`;
         return cede(findingsSummary);
       },
-    } as CodeTransition<ResearcherState>,
+    }),
   },
-  packs: [guidancePack],
-  initialState: { query: "", findings: [] },
+  initialState: { query: "", findings: [], guidance: undefined },
 });
