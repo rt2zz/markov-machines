@@ -19,92 +19,6 @@ export type RunMachineInput = string | Command | Resume;
 const hasPackStates = (ps?: Record<string, unknown>): boolean =>
   ps !== undefined && Object.keys(ps).length > 0;
 
-/**
- * Rebuild the tree by replacing the updated leaf instance.
- * Used after single-leaf execution to propagate changes up the ancestor chain.
- */
-function rebuildTree(
-  updatedActive: Instance,
-  ancestors: Instance[],
-  packStates?: Record<string, unknown>,
-): Instance {
-  // If no ancestors, the root IS the active instance
-  if (ancestors.length === 0) {
-    // Apply packStates directly to root if provided
-    if (hasPackStates(packStates)) {
-      return { ...updatedActive, packStates };
-    }
-    return updatedActive;
-  }
-
-  // Build from bottom up
-  let current: Instance = updatedActive;
-  for (let i = ancestors.length - 1; i >= 0; i--) {
-    const ancestor = ancestors[i];
-    if (!ancestor) continue;
-
-    const isRoot = i === 0;
-    const ancestorChildren = ancestor.children ?? [];
-
-    // Clone the ancestor and update its children (replace last element)
-    const newChildren = [...ancestorChildren];
-    newChildren[newChildren.length - 1] = current;
-    current = {
-      id: ancestor.id,
-      node: ancestor.node,
-      state: ancestor.state,
-      children: newChildren,
-      // Apply packStates to root instance only
-      ...(isRoot && hasPackStates(packStates) ? { packStates } : {}),
-    };
-  }
-
-  return current;
-}
-
-/**
- * Rebuild the tree after a cede, removing the ceded child.
- * The parent becomes the new active instance.
- */
-function rebuildTreeAfterCede(
-  ancestors: Instance[],
-  packStates?: Record<string, unknown>,
-): Instance {
-  // If no ancestors, the root itself ceded - this shouldn't happen
-  // since root has no parent to cede to
-  if (ancestors.length === 0) {
-    throw new Error("Root instance cannot cede - no parent to return to");
-  }
-
-  // The direct parent of the ceded child
-  const directParent = ancestors[ancestors.length - 1];
-  if (!directParent) {
-    throw new Error("No direct parent found for cede");
-  }
-
-  // Remove the ceded child from the direct parent (remove last element)
-  const parentChildren = directParent.children ?? [];
-  const newChildren = parentChildren.slice(0, -1);
-  const updatedParent: Instance = {
-    id: directParent.id,
-    node: directParent.node,
-    state: directParent.state,
-    children: newChildren.length === 0 ? undefined : newChildren,
-  };
-
-  // If there's only one ancestor (the direct parent), it becomes the root
-  if (ancestors.length === 1) {
-    if (hasPackStates(packStates)) {
-      return { ...updatedParent, packStates };
-    }
-    return updatedParent;
-  }
-
-  // Otherwise, rebuild the tree with the updated parent
-  const remainingAncestors = ancestors.slice(0, -1);
-  return rebuildTree(updatedParent, remainingAncestors, packStates);
-}
-
 // ============================================================================
 // Parallel Execution Helpers
 // ============================================================================
@@ -468,96 +382,43 @@ export async function* runMachine<AppMessage = unknown>(
       }
     }
 
-    // Single leaf path (backwards compatible)
-    if (activeLeaves.length === 1) {
-      const result = results[0]!;
-      const leafInfo = activeLeaves[0]!;
-      const ancestors = leafInfo.path.slice(0, -1);
+    // Process all results through unified path
+    const merged = mergeLeafResults(currentInstance, results);
+    currentInstance = merged.instance;
 
-      // Handle cede: rebuild tree without the ceded child
-      if (result.yieldReason === "cede") {
-        currentInstance = rebuildTreeAfterCede(ancestors, result.packStates);
-        const cedingInstanceId = result.instanceId;
+    // Single-leaf cede: yield explicit cede step (backwards compatible)
+    // Multi-leaf cede (worker cedes while primary continues): just add to history
+    if (activeLeaves.length === 1 && merged.hasCede) {
+      const cedeInfo = merged.cedeContents[0];
+      const cedeContent = cedeInfo?.content;
 
-        // Yield cede step (never final - parent needs to respond)
-        yield {
-          instance: currentInstance,
-          messages: result.messages,
-          yieldReason: "cede",
-          done: false,
-          cedeContent: result.cedeContent,
-        };
-
-        // Prepare for parent's turn with cede content
-        if (result.cedeContent !== undefined) {
-          if (typeof result.cedeContent === "string") {
-            // String content becomes a user message
-            const cedeMessage = userMessage<AppMessage>(result.cedeContent, cedingInstanceId);
-            currentHistory = [...baseHistory, cedeMessage];
-          } else {
-            // Message[] content is appended directly
-            currentHistory = [...baseHistory, ...result.cedeContent];
-          }
-        } else {
-          currentHistory = baseHistory;
-        }
-        currentInput = "";
-        continue;
-      }
-
-      // Normal case: rebuild tree with updated instance
-      currentInstance = rebuildTree(result.instance, ancestors, result.packStates);
-
-      // Handle max_tokens: give LLM one recovery chance
-      if (result.yieldReason === "max_tokens" && !tokenRecoveryAttempted) {
-        tokenRecoveryAttempted = true;
-        if (options?.debug) {
-          console.log(`[runMachine] max_tokens hit, attempting recovery...`);
-        }
-
-        // Yield the partial step (not final)
-        yield {
-          instance: currentInstance,
-          messages: result.messages,
-          yieldReason: result.yieldReason,
-          done: false,
-        };
-
-        // Add recovery message and continue
-        const recoveryMessage = userMessage<AppMessage>(
-          `[System: Your response was cut off due to length limits. Please provide a brief summary of your findings and respond to the user now. Do not use any tools - just give your final answer.]`
-        );
-        currentHistory = [...currentHistory, ...(result.messages as Message<AppMessage>[]), recoveryMessage];
-        currentInput = "";
-        continue;
-      }
-
-      // Determine if this is the final step
-      const isFinal = result.yieldReason === "end_turn" ||
-                      result.yieldReason === "max_tokens";
-
+      // Yield cede step (never final - parent needs to respond)
       yield {
         instance: currentInstance,
-        messages: result.messages,
-        yieldReason: result.yieldReason,
-        done: isFinal,
+        messages: merged.messages,
+        yieldReason: "cede",
+        done: false,
+        cedeContent,
       };
 
-      if (isFinal) {
-        return;
+      // Prepare for parent's turn with cede content
+      if (cedeContent !== undefined) {
+        if (typeof cedeContent === "string") {
+          // String content becomes a user message
+          const cedeMessage = userMessage<AppMessage>(cedeContent, cedeInfo!.instanceId);
+          currentHistory = [...baseHistory, cedeMessage];
+        } else {
+          // Message[] content is appended directly
+          currentHistory = [...baseHistory, ...cedeContent];
+        }
+      } else {
+        currentHistory = baseHistory;
       }
-
-      // Not final - continue to next step
-      currentHistory = [...currentHistory, ...(result.messages as Message<AppMessage>[])];
       currentInput = "";
       continue;
     }
 
-    // Multi-leaf path (parallel execution)
-    const merged = mergeLeafResults(currentInstance, results);
-    currentInstance = merged.instance;
-
-    // Handle cede contents - add them as messages for parent context
+    // Multi-leaf cede: add cede contents as messages for parent context
     // NOTE: When one leaf cedes while siblings continue, the cede content is added
     // to shared history. This means sibling context may see messages from the ceding
     // branch. This is a known limitation - revisit if isolation is needed.
@@ -573,6 +434,43 @@ export async function* runMachine<AppMessage = unknown>(
             currentHistory = [...currentHistory, ...content];
           }
         }
+      }
+    }
+
+    // Handle max_tokens recovery for primary (non-worker) leaf
+    // Worker max_tokens is treated as tool_use (keep running) by mergeLeafResults
+    const primaryResult = results.find(r => !r.isWorker);
+    if (primaryResult?.yieldReason === "max_tokens") {
+      if (!tokenRecoveryAttempted) {
+        tokenRecoveryAttempted = true;
+        if (options?.debug) {
+          console.log(`[runMachine] max_tokens hit, attempting recovery...`);
+        }
+
+        // Yield the partial step (not final)
+        yield {
+          instance: currentInstance,
+          messages: merged.messages,
+          yieldReason: "max_tokens",
+          done: false,
+        };
+
+        // Add recovery message and continue
+        const recoveryMessage = userMessage<AppMessage>(
+          `[System: Your response was cut off due to length limits. Please provide a brief summary of your findings and respond to the user now. Do not use any tools - just give your final answer.]`
+        );
+        currentHistory = [...currentHistory, ...merged.messages, recoveryMessage];
+        currentInput = "";
+        continue;
+      } else {
+        // Recovery already attempted, treat as final
+        yield {
+          instance: currentInstance,
+          messages: merged.messages,
+          yieldReason: "max_tokens",
+          done: true,
+        };
+        return;
       }
     }
 

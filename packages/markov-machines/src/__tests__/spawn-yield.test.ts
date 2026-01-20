@@ -783,12 +783,16 @@ describe("cede continuation", () => {
     // First step: cede with content
     expect(steps[0]?.yieldReason).toBe("cede");
     expect(steps[0]?.cedeContent).toBe("Findings: item1, item2");
-    expect(steps[0]?.messages).toEqual([{ role: "assistant", content: "Calling cede..." }]);
+    expect(steps[0]?.messages).toEqual([
+      expect.objectContaining({ role: "assistant", content: "Calling cede..." }),
+    ]);
     expect(steps[0]?.done).toBe(false);
 
     // Second step: parent responds
     expect(steps[1]?.yieldReason).toBe("end_turn");
-    expect(steps[1]?.messages).toEqual([{ role: "assistant", content: "Got the results!" }]);
+    expect(steps[1]?.messages).toEqual([
+      expect.objectContaining({ role: "assistant", content: "Got the results!" }),
+    ]);
     expect(steps[1]?.done).toBe(true);
   });
 });
