@@ -9,8 +9,7 @@ import type {
 } from "../types/commands.js";
 import { getActiveInstance, findInstanceById } from "../types/instance.js";
 import { executeCommand as executeCommandOnInstance } from "../runtime/command-executor.js";
-import { isCedeResult, isSuspendResult } from "../types/transitions.js";
-import { isResumeResult } from "../types/commands.js";
+import { isCedeResult } from "../types/transitions.js";
 
 /**
  * Get available commands on the current active instance.
@@ -64,7 +63,6 @@ export async function runCommand(
   if (transitionResult && isCedeResult(transitionResult)) {
     const updatedRoot = removeActiveInstance(machine.instance, target.id);
     if (!updatedRoot) {
-      // Root instance ceded - this is an error state
       return {
         machine,
         result: { success: false, error: "Cannot cede from root instance" },
@@ -76,27 +74,9 @@ export async function runCommand(
     };
   }
 
-  // Handle suspend - instance is updated with suspended field
-  if (transitionResult && isSuspendResult(transitionResult)) {
-    const updatedRoot = replaceInstance(machine.instance, target.id, updatedInstance);
-    return {
-      machine: { ...machine, instance: updatedRoot },
-      result,
-    };
-  }
-
-  // Handle resume - suspended field is cleared
-  if (transitionResult && isResumeResult(transitionResult)) {
-    const updatedRoot = replaceInstance(machine.instance, target.id, updatedInstance);
-    return {
-      machine: { ...machine, instance: updatedRoot },
-      result,
-    };
-  }
-
-  // Replace target instance in tree with updated one
+  // All other cases (including suspend, resume, spawn, transition):
+  // just replace the instance in tree
   const updatedRoot = replaceInstance(machine.instance, target.id, updatedInstance);
-
   return {
     machine: { ...machine, instance: updatedRoot },
     result,

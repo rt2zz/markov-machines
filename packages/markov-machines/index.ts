@@ -4,7 +4,6 @@ export { createNode } from "./src/core/node.js";
 export { createMachine } from "./src/core/machine.js";
 export { createTransition } from "./src/core/transition.js";
 export { cede, spawn, suspend } from "./src/helpers/cede-spawn.js";
-export type { SuspendHelperOptions } from "./src/helpers/cede-spawn.js";
 export type { TransitionConfig } from "./src/core/transition.js";
 export { runMachine, runMachineToCompletion } from "./src/core/run.js";
 export type { RunMachineInput } from "./src/core/run.js";
@@ -132,6 +131,8 @@ export {
   getSuspendedInstances,
   findInstanceById,
   isSuspendedInstance,
+  createSuspendInfo,
+  clearSuspension,
   isCodeTransition,
   isGeneralTransition,
   transitionHasArguments,

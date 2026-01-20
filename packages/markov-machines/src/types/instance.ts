@@ -1,6 +1,7 @@
 import { v4 as uuid } from "uuid";
 import type { Node } from "./node.js";
 import type { StandardNodeConfig } from "../executor/types.js";
+import type { SuspendResult } from "./transitions.js";
 
 /**
  * Helper to extract state type from a Node type.
@@ -235,4 +236,25 @@ export function getSuspendedInstances(instance: Instance, maxDepth = 100): Insta
 export function findInstanceById(root: Instance, id: string, maxDepth = 100): Instance | undefined {
   const all = getAllInstances(root, maxDepth);
   return all.find(inst => inst.id === id);
+}
+
+/**
+ * Create SuspendInfo from a SuspendResult.
+ */
+export function createSuspendInfo(result: SuspendResult): SuspendInfo {
+  return {
+    suspendId: result.suspendId,
+    reason: result.reason,
+    suspendedAt: new Date(),
+    metadata: result.metadata,
+  };
+}
+
+/**
+ * Clear suspension from an instance.
+ * Returns a new instance without the suspended field.
+ */
+export function clearSuspension(instance: Instance): Instance {
+  const { suspended: _, ...rest } = instance;
+  return rest as Instance;
 }

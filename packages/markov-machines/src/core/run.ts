@@ -4,7 +4,7 @@ import type { Instance, ActiveLeafInfo } from "../types/instance.js";
 import type { Command, Resume } from "../types/commands.js";
 import type { Message } from "../types/messages.js";
 import type { YieldReason } from "../executor/types.js";
-import { getInstancePath, getActiveLeaves, isPassiveInstance, getSuspendedInstances, findInstanceById } from "../types/instance.js";
+import { getInstancePath, getActiveLeaves, isPassiveInstance, getSuspendedInstances, findInstanceById, clearSuspension } from "../types/instance.js";
 import { userMessage } from "../types/messages.js";
 import { isCommand, isResume } from "../types/commands.js";
 import { runCommand } from "./commands.js";
@@ -359,10 +359,7 @@ export async function* runMachine<AppMessage = unknown>(
     const updatedInstance = updateInstanceById(
       machine.instance,
       input.instanceId,
-      (inst) => {
-        const { suspended: _, ...rest } = inst;
-        return rest as Instance;
-      },
+      clearSuspension,
     );
 
     yield {
