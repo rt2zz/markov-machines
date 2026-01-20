@@ -49,17 +49,17 @@ export type {
   NodeConfig,
   NodeToolEntry,
   OutputConfig,
-  PassiveNode,
-  PassiveNodeConfig,
+  WorkerNode,
+  WorkerNodeConfig,
 } from "./node.js";
-export { isNode, isPassiveNode } from "./node.js";
+export { isNode, isWorkerNode } from "./node.js";
 
 // Instance
 export type { Instance, NodeState, ActiveLeafInfo, SuspendInfo } from "./instance.js";
 export {
   createInstance,
   isInstance,
-  isPassiveInstance,
+  isWorkerInstance,
   isSuspendedInstance,
   getActiveInstance,
   getInstancePath,

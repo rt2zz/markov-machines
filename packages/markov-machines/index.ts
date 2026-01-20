@@ -1,6 +1,6 @@
 // Core functions
 export { createCharter } from "./src/core/charter.js";
-export { createNode } from "./src/core/node.js";
+export { createNode, createWorkerNode } from "./src/core/node.js";
 export { createMachine } from "./src/core/machine.js";
 export { createTransition } from "./src/core/transition.js";
 export { cede, spawn, suspend } from "./src/helpers/cede-spawn.js";
@@ -45,6 +45,8 @@ export type {
   Node,
   NodeConfig,
   NodeToolEntry,
+  WorkerNode,
+  WorkerNodeConfig,
   // Instance
   Instance,
   NodeState,
@@ -122,7 +124,9 @@ export {
   isSerialNode,
   isSerialTransition,
   isNode,
+  isWorkerNode,
   isInstance,
+  isWorkerInstance,
   createInstance,
   getActiveInstance,
   getInstancePath,

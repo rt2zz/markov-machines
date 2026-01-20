@@ -86,10 +86,10 @@ export function isInstance<N extends Node = Node>(value: unknown): value is Inst
 }
 
 /**
- * Check if an instance is passive.
+ * Check if an instance is a worker instance.
  */
-export function isPassiveInstance(instance: Instance): boolean {
-  return instance.node.passive === true;
+export function isWorkerInstance(instance: Instance): boolean {
+  return instance.node.worker === true;
 }
 
 /**
@@ -101,8 +101,9 @@ export function getChildren(inst: Instance): Instance[] {
 }
 
 /**
- * Get the active instance (last deepest child).
- * When children exist, picks the LAST element.
+ * Get the primary active instance by following the last child at each level.
+ * Used for operations that need a single target (e.g., command routing when no instanceId specified).
+ * Note: For parallel execution, use getActiveLeaves() which returns ALL non-suspended leaves.
  */
 export function getActiveInstance(instance: Instance): Instance {
   let current: Instance = instance;
@@ -115,15 +116,15 @@ export function getActiveInstance(instance: Instance): Instance {
 }
 
 /**
- * Get all instances from root to active leaf.
- * When encountering children, follows the LAST child path.
+ * Get path from root to the primary active leaf (following last child at each level).
+ * Used for single-path tree operations. For parallel execution, use getActiveLeaves().
  */
 export function getInstancePath(instance: Instance): Instance[] {
   const path: Instance[] = [];
   let current: Instance | undefined = instance;
   while (current) {
     path.push(current);
-    const children = current.children;
+    const children: Instance[] | undefined = current.children;
     if (!children || children.length === 0) break;
     current = children[children.length - 1];
   }
@@ -175,8 +176,8 @@ export interface ActiveLeafInfo {
   path: Instance[];
   /** Index path for tree updates (e.g., [0, 2] = root.children[0].children[2]) */
   leafIndex: number[];
-  /** Whether this is a passive instance */
-  isPassive: boolean;
+  /** Whether this is a worker instance */
+  isWorker: boolean;
 }
 
 /**
@@ -204,7 +205,7 @@ export function getActiveLeaves(instance: Instance): ActiveLeafInfo[] {
       results.push({
         path: currentPath,
         leafIndex: indices,
-        isPassive: isPassiveInstance(inst),
+        isWorker: isWorkerInstance(inst),
       });
       return;
     }

@@ -49,7 +49,7 @@ export function cede<M = unknown>(
 /**
  * Spawn one or more child instances.
  * Children are added to the current node's children array.
- * Supports both standard and passive nodes.
+ * Supports both standard and worker nodes.
  *
  * @param nodeOrTargets - Single node or array of SpawnTargets
  * @param state - Initial state (only used when first arg is a node)

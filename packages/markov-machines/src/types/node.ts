@@ -49,15 +49,15 @@ export interface NodeConfig<S = unknown, M = never> {
 }
 
 /**
- * Passive node configuration for createPassiveNode.
- * Passive nodes execute in parallel with the main flow but:
+ * Worker node configuration for createWorkerNode.
+ * Worker nodes execute in parallel with the main flow but:
  * - Don't receive user input
  * - Can't access packs
  * - Must cede to return control (end_turn throws an error)
  * @typeParam S - The node's state type.
  * @typeParam M - The output message type (never = no structured output).
  */
-export interface PassiveNodeConfig<S = unknown, M = never> {
+export interface WorkerNodeConfig<S = unknown, M = never> {
   instructions: string;
   /** Node tools (state access via context) */
   tools?: Record<string, NodeToolEntry<S>>;
@@ -72,7 +72,7 @@ export interface PassiveNodeConfig<S = unknown, M = never> {
   executorConfig?: StandardNodeConfig;
   /** Structured output configuration */
   output?: OutputConfig<M>;
-  // packs intentionally omitted - passive nodes can't access packs
+  // packs intentionally omitted - worker nodes can't access packs
 }
 
 /**
@@ -99,39 +99,39 @@ export interface Node<S = unknown, M = never> {
   executorConfig?: StandardNodeConfig;
   /** Structured output configuration */
   output?: OutputConfig<M>;
-  /** Packs this node uses (not available on passive nodes) */
+  /** Packs this node uses (not available on worker nodes) */
   packs?: Pack<unknown>[];
-  /** Whether this is a passive node */
-  passive?: boolean;
+  /** Whether this is a worker node */
+  worker?: boolean;
 }
 
 /**
- * Passive runtime node - extends Node with passive: true.
+ * Worker runtime node - extends Node with worker: true.
  *
- * A passive instance is one that was spawned in parallel alongside other
- * instances. Passive instances have these constraints:
+ * A worker instance is one that was spawned in parallel alongside other
+ * instances. Worker instances have these constraints:
  *
- * - **Don't receive user input**: Passive nodes get empty string for input,
- *   since only one node can be "active" and receiving user messages at a time.
+ * - **Don't receive user input**: Worker nodes get empty string for input,
+ *   since only one node can receive user messages at a time.
  *
- * - **Can't update pack states**: Pack state updates from passive nodes are
- *   disallowed because they could conflict with updates from the active node.
- *   The packs field is omitted from PassiveNodeConfig.
+ * - **Can't update pack states**: Pack state updates from worker nodes are
+ *   disallowed because they could conflict with updates from the non-worker node.
+ *   The packs field is omitted from WorkerNodeConfig.
  *
- * - **Should cede() to return control**: When a passive node's work is complete,
+ * - **Should cede() to return control**: When a worker node's work is complete,
  *   it should call cede() to remove itself from the tree and optionally pass
  *   content back to the parent.
  *
- * - **end_turn doesn't propagate to machine**: If a passive node returns
+ * - **end_turn doesn't propagate to machine**: If a worker node returns
  *   end_turn without ceding, a warning is logged but the machine continues.
- *   This prevents passive nodes from prematurely ending the conversation.
+ *   This prevents worker nodes from prematurely ending the conversation.
  *
  * @typeParam S - The node's state type.
  * @typeParam M - The output message type (never = no structured output).
  */
-export interface PassiveNode<S = unknown, M = never> extends Node<S, M> {
-  /** Mark as passive node - enables parallel execution but disables pack access */
-  passive: true;
+export interface WorkerNode<S = unknown, M = never> extends Node<S, M> {
+  /** Mark as worker node - enables parallel execution but disables pack access */
+  worker: true;
 }
 
 /**
@@ -150,8 +150,8 @@ export function isNode<S, M = never>(value: unknown): value is Node<S, M> {
 }
 
 /**
- * Check if a node is a passive node.
+ * Check if a node is a worker node.
  */
-export function isPassiveNode<S, M = never>(node: Node<S, M>): node is PassiveNode<S, M> {
-  return node.passive === true;
+export function isWorkerNode<S, M = never>(node: Node<S, M>): node is WorkerNode<S, M> {
+  return node.worker === true;
 }

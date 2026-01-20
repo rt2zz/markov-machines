@@ -16,7 +16,7 @@ export interface TransitionContext {
 
 /**
  * Spawn target specification.
- * Supports both standard and passive nodes.
+ * Supports both standard and worker nodes.
  */
 export interface SpawnTarget<T = unknown> {
   node: Node<T>;
@@ -27,7 +27,7 @@ export interface SpawnTarget<T = unknown> {
 
 /**
  * Normal transition - replace current instance with new node.
- * Supports both standard and passive nodes.
+ * Supports both standard and worker nodes.
  */
 export interface TransitionToResult<T = unknown> {
   type: "transition";
@@ -137,7 +137,7 @@ export type Transition<S = unknown> =
 
 /**
  * Helper to create a type-safe transition result.
- * Supports both standard and passive nodes.
+ * Supports both standard and worker nodes.
  */
 export function transitionTo<T>(
   node: Node<T>,

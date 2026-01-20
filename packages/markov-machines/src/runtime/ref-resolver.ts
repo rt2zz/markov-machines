@@ -51,9 +51,9 @@ export function resolveTool(
     return { tool: charterTool, owner: "charter" };
   }
 
-  // Finally check pack tools (for packs on current node, only for non-passive nodes)
-  // Passive nodes don't have access to packs
-  if (!instance.node.passive) {
+  // Finally check pack tools (for packs on current node, only for non-worker nodes)
+  // Worker nodes don't have access to packs
+  if (!instance.node.worker) {
     const standardNode = instance.node as Node<unknown>;
     for (const pack of standardNode.packs ?? []) {
       const packTool = pack.tools[toolName];
