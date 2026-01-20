@@ -99,7 +99,7 @@ export async function executeCommand(
 
     // Handle spawn result
     if (isSpawnResult(cmdResult)) {
-      const children = cmdResult.children.map((target) =>
+      const newChildren = cmdResult.children.map((target) =>
         createInstance(
           target.node,
           target.state ?? target.node.initialState,
@@ -111,7 +111,7 @@ export async function executeCommand(
       const updatedInstance: Instance = {
         ...instance,
         state: currentState,
-        child: children.length === 1 ? children[0] : children,
+        children: newChildren.length === 0 ? undefined : newChildren,
       };
       return {
         result: { success: true },

@@ -44,31 +44,19 @@ function rebuildTree(
     if (!ancestor) continue;
 
     const isRoot = i === 0;
+    const ancestorChildren = ancestor.children ?? [];
 
-    // Clone the ancestor and update its child
-    if (Array.isArray(ancestor.child)) {
-      // For array children, replace the last element
-      const newChildren = [...ancestor.child];
-      newChildren[newChildren.length - 1] = current;
-      current = {
-        id: ancestor.id,
-        node: ancestor.node,
-        state: ancestor.state,
-        child: newChildren,
-        // Apply packStates to root instance only
-        ...(isRoot && hasPackStates(packStates) ? { packStates } : {}),
-      };
-    } else {
-      // For single child, just replace
-      current = {
-        id: ancestor.id,
-        node: ancestor.node,
-        state: ancestor.state,
-        child: current,
-        // Apply packStates to root instance only
-        ...(isRoot && hasPackStates(packStates) ? { packStates } : {}),
-      };
-    }
+    // Clone the ancestor and update its children (replace last element)
+    const newChildren = [...ancestorChildren];
+    newChildren[newChildren.length - 1] = current;
+    current = {
+      id: ancestor.id,
+      node: ancestor.node,
+      state: ancestor.state,
+      children: newChildren,
+      // Apply packStates to root instance only
+      ...(isRoot && hasPackStates(packStates) ? { packStates } : {}),
+    };
   }
 
   return current;
@@ -94,26 +82,15 @@ function rebuildTreeAfterCede(
     throw new Error("No direct parent found for cede");
   }
 
-  // Remove the ceded child from the direct parent
-  let updatedParent: Instance;
-  if (Array.isArray(directParent.child)) {
-    // For array children, remove the last element (the ceded child)
-    const newChildren = directParent.child.slice(0, -1);
-    updatedParent = {
-      id: directParent.id,
-      node: directParent.node,
-      state: directParent.state,
-      child: newChildren.length === 0 ? undefined : newChildren.length === 1 ? newChildren[0] : newChildren,
-    };
-  } else {
-    // For single child, remove it entirely
-    updatedParent = {
-      id: directParent.id,
-      node: directParent.node,
-      state: directParent.state,
-      child: undefined,
-    };
-  }
+  // Remove the ceded child from the direct parent (remove last element)
+  const parentChildren = directParent.children ?? [];
+  const newChildren = parentChildren.slice(0, -1);
+  const updatedParent: Instance = {
+    id: directParent.id,
+    node: directParent.node,
+    state: directParent.state,
+    children: newChildren.length === 0 ? undefined : newChildren,
+  };
 
   // If there's only one ancestor (the direct parent), it becomes the root
   if (ancestors.length === 1) {
@@ -181,12 +158,12 @@ function updateLeafAtIndex(
   if (indices.length === 0) return updater(root);
 
   const [head, ...rest] = indices;
-  const children = Array.isArray(root.child) ? root.child : [root.child!];
+  const children = root.children ?? [];
   const updated = children.map((c, i) => i === head ? updateLeafAtIndex(c, rest, updater) : c);
 
   return {
     ...root,
-    child: updated.length === 1 ? updated[0] : updated,
+    children: updated.length === 0 ? undefined : updated,
   };
 }
 
@@ -194,23 +171,23 @@ function updateLeafAtIndex(
  * Remove a leaf instance at the given index path.
  */
 function removeLeafAtIndex(root: Instance, indices: number[]): Instance {
+  const children = root.children ?? [];
+
   if (indices.length === 1) {
     const [idx] = indices;
-    if (!Array.isArray(root.child)) return { ...root, child: undefined };
-    const filtered = root.child.filter((_, i) => i !== idx);
+    const filtered = children.filter((_, i) => i !== idx);
     return {
       ...root,
-      child: filtered.length === 0 ? undefined : filtered.length === 1 ? filtered[0] : filtered,
+      children: filtered.length === 0 ? undefined : filtered,
     };
   }
 
   const [head, ...rest] = indices;
-  const children = Array.isArray(root.child) ? root.child : [root.child!];
   const updated = children.map((c, i) => i === head ? removeLeafAtIndex(c, rest) : c);
 
   return {
     ...root,
-    child: updated.length === 1 ? updated[0] : updated,
+    children: updated.length === 0 ? undefined : updated,
   };
 }
 
@@ -221,10 +198,18 @@ function wrapMessages<AppMessage>(
   messages: Message<AppMessage>[],
   sourceInstanceId: string,
 ): Message<AppMessage>[] {
-  return messages.map(msg => ({
-    ...msg,
-    metadata: { ...(msg as { metadata?: Record<string, unknown> }).metadata, sourceInstanceId },
-  })) as Message<AppMessage>[];
+  return messages.map(msg => {
+    const existing = (msg as { metadata?: Record<string, unknown> }).metadata;
+    if (existing?.sourceInstanceId && existing.sourceInstanceId !== sourceInstanceId) {
+      console.warn(
+        `[wrapMessages] Overwriting sourceInstanceId: ${existing.sourceInstanceId} -> ${sourceInstanceId}`
+      );
+    }
+    return {
+      ...msg,
+      metadata: { ...existing, sourceInstanceId },
+    };
+  }) as Message<AppMessage>[];
 }
 
 /**
@@ -239,20 +224,14 @@ function updateInstanceById(
     return updater(root);
   }
 
-  if (!root.child) {
+  const children = root.children;
+  if (!children || children.length === 0) {
     return root;
-  }
-
-  if (Array.isArray(root.child)) {
-    return {
-      ...root,
-      child: root.child.map((c) => updateInstanceById(c, targetId, updater)),
-    };
   }
 
   return {
     ...root,
-    child: updateInstanceById(root.child, targetId, updater),
+    children: children.map((c) => updateInstanceById(c, targetId, updater)),
   };
 }
 
@@ -285,16 +264,21 @@ function mergeLeafResults<AppMessage>(
     const { leafIndex, isPassive, instanceId, messages, yieldReason, packStates, cedeContent } = leaf;
 
     // Only non-passive can update pack states
+    // Note: Only one non-passive leaf can exist at a time (validated at lines 439-445),
+    // so pack state conflicts between leaves cannot occur. This assignment is safe.
     if (!isPassive && packStates) {
       Object.assign(packStateUpdates, packStates);
     }
 
-    // Passive end_turn without cede -> error
+    // Passive end_turn without cede -> warning (but don't propagate as machine end_turn)
     if (isPassive && yieldReason === "end_turn") {
-      throw new Error(
-        `Passive instance ${instanceId} returned end_turn without ceding. ` +
-        `Passive nodes must cede to return control to parent.`
+      console.warn(
+        `[runMachine] Passive instance ${instanceId} returned end_turn without ceding. ` +
+        `This is unexpected - passive nodes should cede to return control to parent. ` +
+        `Treating as if passive work is complete (not propagating end_turn to machine).`
       );
+      // Continue processing - don't let passive end_turn affect machine state
+      continue;
     }
 
     // Cede -> remove leaf
@@ -574,6 +558,9 @@ export async function* runMachine<AppMessage = unknown>(
     currentInstance = merged.instance;
 
     // Handle cede contents - add them as messages for parent context
+    // NOTE: When one leaf cedes while siblings continue, the cede content is added
+    // to shared history. This means sibling context may see messages from the ceding
+    // branch. This is a known limitation - revisit if isolation is needed.
     if (merged.hasCede && merged.cedeContents.length > 0) {
       for (const { instanceId, content } of merged.cedeContents) {
         if (content !== undefined) {

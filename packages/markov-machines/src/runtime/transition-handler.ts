@@ -14,7 +14,7 @@ import type { StandardNodeConfig } from "../executor/types.js";
 export interface TransitionOutcome {
   node: Node<unknown>;
   state: unknown;
-  children: Instance | Instance[] | undefined;
+  children: Instance[] | undefined;
   executorConfig?: StandardNodeConfig;
   yieldReason: "tool_use" | "cede" | "suspend";
   /** Content from cede (string or Message[]) */
@@ -31,7 +31,7 @@ export function handleTransitionResult(
   result: TransitionResult<unknown>,
   currentNode: Node<unknown>,
   currentState: unknown,
-  currentChildren: Instance | Instance[] | undefined,
+  currentChildren: Instance[] | undefined,
 ): TransitionOutcome {
   // Handle discriminated union
   if (isCedeResult(result)) {
@@ -62,26 +62,19 @@ export function handleTransitionResult(
       createInstance(
         node,
         state ?? node.initialState,
-        undefined, // child
+        undefined, // children
         undefined, // packStates
         childExecConfig ?? node.executorConfig, // Apply config hierarchy
       ),
     );
 
     // Append to existing children
-    let updatedChildren: Instance | Instance[] | undefined;
-    if (Array.isArray(currentChildren)) {
-      updatedChildren = [...currentChildren, ...newChildren];
-    } else if (currentChildren) {
-      updatedChildren = [currentChildren, ...newChildren];
-    } else {
-      updatedChildren = newChildren.length === 1 ? newChildren[0] : newChildren;
-    }
+    const updatedChildren = [...(currentChildren ?? []), ...newChildren];
 
     return {
       node: currentNode,
       state: currentState,
-      children: updatedChildren,
+      children: updatedChildren.length === 0 ? undefined : updatedChildren,
       yieldReason: "tool_use", // More work to do
     };
   }

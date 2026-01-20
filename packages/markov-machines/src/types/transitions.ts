@@ -102,6 +102,7 @@ export interface TransitionToOptions {
  * S is the source state type.
  */
 export interface CodeTransition<S = unknown> {
+  type: "code";
   description: string;
   /** Optional custom arguments schema */
   arguments?: z.ZodType;
@@ -210,9 +211,8 @@ export function isCodeTransition<S>(
   return (
     typeof value === "object" &&
     value !== null &&
-    "description" in value &&
-    "execute" in value &&
-    typeof (value as CodeTransition<S>).execute === "function"
+    "type" in value &&
+    (value as CodeTransition<S>).type === "code"
   );
 }
 

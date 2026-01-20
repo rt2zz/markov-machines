@@ -150,12 +150,18 @@ async function handleRegularTool(
 
     // Execute pack tool with pack context
     try {
-      const packTool = tool as {
-        execute: (
-          input: unknown,
-          ctx: { state: unknown; updateState: (patch: Partial<unknown>) => void },
-        ) => Promise<unknown> | unknown;
-      };
+      const packTool = tool as AnyPackToolDefinition;
+
+      // Validate input if pack tool has inputSchema
+      if (packTool.inputSchema) {
+        const parseResult = packTool.inputSchema.safeParse(toolInput);
+        if (!parseResult.success) {
+          return {
+            newCurrentState: currentState,
+            results: [toolResult(id, `Invalid pack tool input: ${parseResult.error.message}`, true)],
+          };
+        }
+      }
 
       // Track pack state validation errors
       let packStateError: string | undefined;
@@ -180,7 +186,7 @@ async function handleRegularTool(
         return {
           newCurrentState: currentState,
           results: [
-            toolResult(id, `${resultStr}\n\nWarning: ${packStateError}`, false),
+            toolResult(id, `${resultStr}\n\nError: ${packStateError}`, true),
           ],
         };
       }

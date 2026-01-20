@@ -63,7 +63,7 @@ export class StandardExecutor implements Executor<unknown> {
   ): Promise<RunResult<unknown>> {
     let currentState = instance.state;
     let currentNode: Node<unknown> = instance.node;
-    let currentChildren = instance.child;
+    let currentChildren = instance.children;
     let currentExecutorConfig = instance.executorConfig;
     const newMessages: Message[] = [];
     const isPassive = instance.node.passive === true;
@@ -305,7 +305,7 @@ export class StandardExecutor implements Executor<unknown> {
     originalInstance: Instance,
     currentNode: Node<unknown>,
     currentState: unknown,
-    currentChildren: Instance | Instance[] | undefined,
+    currentChildren: Instance[] | undefined,
     ancestors: Instance[],
     packStates: Record<string, unknown>,
     executorConfig?: StandardNodeConfig,
@@ -318,7 +318,7 @@ export class StandardExecutor implements Executor<unknown> {
       id: originalInstance.id,
       node: currentNode,
       state: currentState,
-      child: currentChildren,
+      children: currentChildren,
       ...(isRoot && Object.keys(packStates).length > 0 ? { packStates } : {}),
       executorConfig,
       ...(suspendInfo ? { suspended: suspendInfo } : {}),

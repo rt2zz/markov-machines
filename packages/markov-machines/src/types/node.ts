@@ -107,10 +107,25 @@ export interface Node<S = unknown, M = never> {
 
 /**
  * Passive runtime node - extends Node with passive: true.
- * Passive nodes execute in parallel with the main flow but:
- * - Don't receive user input
- * - Can't access packs (enforced at creation time)
- * - Must cede to return control (end_turn throws an error)
+ *
+ * A passive instance is one that was spawned in parallel alongside other
+ * instances. Passive instances have these constraints:
+ *
+ * - **Don't receive user input**: Passive nodes get empty string for input,
+ *   since only one node can be "active" and receiving user messages at a time.
+ *
+ * - **Can't update pack states**: Pack state updates from passive nodes are
+ *   disallowed because they could conflict with updates from the active node.
+ *   The packs field is omitted from PassiveNodeConfig.
+ *
+ * - **Should cede() to return control**: When a passive node's work is complete,
+ *   it should call cede() to remove itself from the tree and optionally pass
+ *   content back to the parent.
+ *
+ * - **end_turn doesn't propagate to machine**: If a passive node returns
+ *   end_turn without ceding, a warning is logged but the machine continues.
+ *   This prevents passive nodes from prematurely ending the conversation.
+ *
  * @typeParam S - The node's state type.
  * @typeParam M - The output message type (never = no structured output).
  */

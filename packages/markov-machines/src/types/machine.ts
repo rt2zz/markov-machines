@@ -50,8 +50,8 @@ export interface SerializedInstance {
   node: SerialNode | Ref;
   /** State for this node */
   state: unknown;
-  /** Optional child instance(s) */
-  child?: SerializedInstance | SerializedInstance[];
+  /** Optional child instances - always an array when present */
+  children?: SerializedInstance[];
   /** Pack states (only on root instance) */
   packStates?: Record<string, unknown>;
   /** Suspension info if suspended */

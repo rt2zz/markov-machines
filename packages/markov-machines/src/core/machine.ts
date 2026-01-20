@@ -23,11 +23,8 @@ function validateInstance(instance: Instance): void {
   }
 
   // Recursively validate children
-  if (instance.child) {
-    const children = Array.isArray(instance.child)
-      ? instance.child
-      : [instance.child];
-    for (const child of children) {
+  if (instance.children) {
+    for (const child of instance.children) {
       validateInstance(child);
     }
   }

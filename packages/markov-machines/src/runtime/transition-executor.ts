@@ -15,6 +15,7 @@ import {
 } from "../types/transitions.js";
 import { isRef, isSerialTransition } from "../types/refs.js";
 import { resolveTransitionRef } from "./ref-resolver.js";
+import type { AnyToolDefinition } from "../types/tools.js";
 
 /**
  * Execute a transition and return the result.
@@ -94,10 +95,22 @@ export function deserializeNode<S>(
     }
   }
 
+  // Resolve tool refs from charter
+  const tools: Record<string, AnyToolDefinition<S>> = {};
+  if (serialNode.tools) {
+    for (const [name, toolRef] of Object.entries(serialNode.tools)) {
+      const resolved = charter.tools[toolRef.ref];
+      if (!resolved) {
+        throw new Error(`Unknown tool ref in inline node: ${toolRef.ref}`);
+      }
+      tools[name] = resolved as AnyToolDefinition<S>;
+    }
+  }
+
   return {
     id: uuid(),
     instructions: serialNode.instructions,
-    tools: {}, // Inline node tools cannot be serialized
+    tools,
     validator,
     transitions,
     initialState: serialNode.initialState,

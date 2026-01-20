@@ -95,22 +95,16 @@ function replaceInstance(
     return replacement;
   }
 
-  if (!root.child) {
+  const children = root.children;
+  if (!children || children.length === 0) {
     return root;
-  }
-
-  if (Array.isArray(root.child)) {
-    return {
-      ...root,
-      child: root.child.map((child) =>
-        replaceInstance(child, targetId, replacement),
-      ),
-    };
   }
 
   return {
     ...root,
-    child: replaceInstance(root.child, targetId, replacement),
+    children: children.map((child) =>
+      replaceInstance(child, targetId, replacement),
+    ),
   };
 }
 
@@ -126,26 +120,19 @@ function removeActiveInstance(
     return undefined;
   }
 
-  if (!root.child) {
+  const children = root.children;
+  if (!children || children.length === 0) {
     return root;
   }
 
-  if (Array.isArray(root.child)) {
-    const filtered = root.child
-      .map((child) => removeActiveInstance(child, targetId))
-      .filter((c): c is Instance => c !== undefined);
+  const filtered = children
+    .map((child) => removeActiveInstance(child, targetId))
+    .filter((c): c is Instance => c !== undefined);
 
-    if (filtered.length === 0) {
-      return { ...root, child: undefined };
-    }
-    if (filtered.length === 1) {
-      return { ...root, child: filtered[0] };
-    }
-    return { ...root, child: filtered };
-  }
-
-  const updatedChild = removeActiveInstance(root.child, targetId);
-  return { ...root, child: updatedChild };
+  return {
+    ...root,
+    children: filtered.length === 0 ? undefined : filtered,
+  };
 }
 
 /**
