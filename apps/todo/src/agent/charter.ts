@@ -8,6 +8,7 @@ import {
 	  spawn,
 	  type Pack,
 	  type TransitionResult,
+	  type Node,
 	} from "markov-machines";
 import {
   listTodos,
@@ -136,9 +137,9 @@ Be concise and helpful.`,
 	  }),
 	  packs: [guidancePack as Pack],
 	  nodes: {
-	    mainNode,
-	    archiveNode,
-	    productResearcherNode,
+	    mainNode: mainNode as Node<unknown>,
+	    archiveNode: archiveNode as Node<unknown>,
+	    productResearcherNode: productResearcherNode as Node<unknown>,
 	  },
 	});
 	

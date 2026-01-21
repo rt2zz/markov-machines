@@ -140,7 +140,10 @@ async function handleRegularTool(
   // Check if this is a pack tool
   if (typeof owner === "object" && "pack" in owner) {
     const packName = owner.pack;
-    const pack = ctx.charter.packs.find((p) => p.name === packName);
+    // Look up pack from charter first, then from current node's packs
+    const pack =
+      ctx.charter.packs.find((p) => p.name === packName) ??
+      ctx.currentNode.packs?.find((p) => p.name === packName);
     if (!pack) {
       return {
         newCurrentState: currentState,
