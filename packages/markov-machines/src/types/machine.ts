@@ -2,6 +2,7 @@ import type { Charter } from "./charter.js";
 import type { Instance, SuspendInfo } from "./instance.js";
 import type { Message } from "./messages.js";
 import type { Ref, SerialNode } from "./refs.js";
+import type { StandardNodeConfig } from "../executor/types.js";
 
 /**
  * Machine configuration for createMachine.
@@ -54,6 +55,8 @@ export interface SerializedInstance {
   children?: SerializedInstance[];
   /** Pack states (only on root instance) */
   packStates?: Record<string, unknown>;
+  /** Per-instance executor configuration override */
+  executorConfig?: StandardNodeConfig;
   /** Suspension info if suspended */
   suspended?: SerializedSuspendInfo;
 }

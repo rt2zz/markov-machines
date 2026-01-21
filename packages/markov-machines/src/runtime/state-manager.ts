@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { StateUpdateResult } from "../types/state.js";
-import { deepMerge } from "../types/state.js";
+import { shallowMerge } from "../types/state.js";
 
 /**
  * Update state with a partial patch.
@@ -11,8 +11,8 @@ export function updateState<S>(
   patch: Partial<S>,
   validator: z.ZodType<S>
 ): StateUpdateResult<S> {
-  // Deep merge the patch into current state
-  const merged = deepMerge(
+  // Shallow merge the patch into current state
+  const merged = shallowMerge(
     currentState as Record<string, unknown>,
     patch as Record<string, unknown>
   ) as S;

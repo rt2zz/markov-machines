@@ -21,6 +21,8 @@ import { executeTransition } from "../runtime/transition-executor.js";
 import { buildSystemPrompt } from "../runtime/system-prompt.js";
 import { processToolCalls } from "../runtime/tool-call-processor.js";
 import { handleTransitionResult } from "../runtime/transition-handler.js";
+import { getOrInitPackState } from "../core/machine.js";
+import { ZOD_JSON_SCHEMA_TARGET_OPENAPI_3 } from "../helpers/json-schema.js";
 import type {
   Executor,
   StandardExecutorConfig,
@@ -71,6 +73,13 @@ export class StandardExecutor implements Executor<unknown> {
     // Get pack states from root instance (first ancestor or current instance)
     const rootInstance = ancestors[0] ?? instance;
     let packStates: Record<string, unknown> = { ...(rootInstance.packStates ?? {}) };
+
+    // Lazy init packs from current node (for node-level packs not in charter)
+    if (!currentNode.worker && currentNode.packs) {
+      for (const pack of currentNode.packs) {
+        getOrInitPackState(packStates, pack);
+      }
+    }
 
     // Build conversation history for API, including previous history
     const conversationHistory: MessageParam[] = [];
@@ -142,7 +151,7 @@ export class StandardExecutor implements Executor<unknown> {
     let outputFormat: { type: "json_schema"; json_schema: { name: string; schema: unknown } } | undefined;
     if (currentNode.output?.schema) {
       const jsonSchema: Record<string, unknown> = z.toJSONSchema(currentNode.output.schema, {
-        target: "openApi3",
+        target: ZOD_JSON_SCHEMA_TARGET_OPENAPI_3,
       }) as Record<string, unknown>;
       outputFormat = {
         type: "json_schema",

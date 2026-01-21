@@ -10,6 +10,7 @@ import {
   transitionHasArguments,
 } from "../types/transitions.js";
 import { resolveTransitionRef } from "../runtime/ref-resolver.js";
+import { ZOD_JSON_SCHEMA_TARGET_OPENAPI_3 } from "../helpers/json-schema.js";
 
 /**
  * Track tool sources for collision detection.
@@ -57,11 +58,13 @@ export function generateToolDefinitions<S>(
     typeof (node.validator as { partial?: () => z.ZodTypeAny }).partial === "function"
       ? (node.validator as z.ZodObject<Record<string, z.ZodTypeAny>>).partial()
       : node.validator;
-  const stateSchema: Record<string, unknown> = z.toJSONSchema(patchValidator, { target: "openapi-3.0" }) as Record<string, unknown>;
+  const stateSchema: Record<string, unknown> = z.toJSONSchema(patchValidator, {
+    target: ZOD_JSON_SCHEMA_TARGET_OPENAPI_3,
+  }) as Record<string, unknown>;
   tools.push({
     name: "updateState",
     description:
-      "Update the current state with a partial patch. The patch will be deep-merged with the current state.",
+      "Update the current state with a partial patch. The patch will be shallow-merged with the current state.",
     input_schema: {
       type: "object",
       properties: {
@@ -157,7 +160,7 @@ export function generateToolDefinitions<S>(
     }
 
     const inputSchema: Record<string, unknown> = z.toJSONSchema(tool.inputSchema, {
-      target: "openapi-3.0",
+      target: ZOD_JSON_SCHEMA_TARGET_OPENAPI_3,
     }) as Record<string, unknown>;
     tools.push({
       name,
@@ -187,7 +190,7 @@ export function generateToolDefinitions<S>(
       }
 
       const inputSchema: Record<string, unknown> = z.toJSONSchema(tool.inputSchema, {
-        target: "openapi-3.0",
+        target: ZOD_JSON_SCHEMA_TARGET_OPENAPI_3,
       }) as Record<string, unknown>;
       tools.push({
         name,
@@ -204,7 +207,7 @@ export function generateToolDefinitions<S>(
     if (toolSources.has(name)) continue;
 
     const inputSchema: Record<string, unknown> = z.toJSONSchema(tool.inputSchema, {
-      target: "openapi-3.0",
+      target: ZOD_JSON_SCHEMA_TARGET_OPENAPI_3,
     }) as Record<string, unknown>;
     tools.push({
       name,
@@ -224,7 +227,7 @@ export function generateToolDefinitions<S>(
         if (toolSources.has(name)) continue;
 
         const inputSchema: Record<string, unknown> = z.toJSONSchema(tool.inputSchema, {
-          target: "openapi-3.0",
+          target: ZOD_JSON_SCHEMA_TARGET_OPENAPI_3,
         }) as Record<string, unknown>;
         tools.push({
           name,
@@ -256,7 +259,9 @@ function getTransitionArgsSchema<S>(
   transition: Transition<S>,
 ): Record<string, unknown> {
   if (isCodeTransition(transition) && transition.arguments) {
-    const schema: Record<string, unknown> = z.toJSONSchema(transition.arguments, { target: "openapi-3.0" }) as Record<string, unknown>;
+    const schema: Record<string, unknown> = z.toJSONSchema(transition.arguments, {
+      target: ZOD_JSON_SCHEMA_TARGET_OPENAPI_3,
+    }) as Record<string, unknown>;
     // Extract just the properties
     if (typeof schema === "object" && "properties" in schema) {
       return (schema as { properties: Record<string, unknown> }).properties;

@@ -36,6 +36,7 @@ export function deserializeInstance(
     state: stateResult.data,
     children,
     ...(serialized.packStates ? { packStates: serialized.packStates } : {}),
+    ...(serialized.executorConfig ? { executorConfig: serialized.executorConfig } : {}),
     ...(serialized.suspended ? {
       suspended: {
         suspendId: serialized.suspended.suspendId,

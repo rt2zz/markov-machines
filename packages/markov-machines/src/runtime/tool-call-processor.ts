@@ -17,6 +17,7 @@ import {
   type AnthropicBuiltinTool,
 } from "../types/tools.js";
 import type { AnyPackToolDefinition } from "../types/pack.js";
+import { getOrInitPackState } from "../core/machine.js";
 
 // Tool name constants
 const TOOL_UPDATE_STATE = "updateState";
@@ -146,7 +147,7 @@ async function handleRegularTool(
         results: [toolResult(id, `Pack not found: ${packName}`, true)],
       };
     }
-    const packState = packStates[packName] ?? pack.initialState;
+    const packState = getOrInitPackState(packStates, pack);
 
     // Execute pack tool with pack context
     try {

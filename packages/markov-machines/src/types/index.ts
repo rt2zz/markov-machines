@@ -41,7 +41,7 @@ export {
 
 // State
 export type { StateUpdateResult } from "./state.js";
-export { deepMerge } from "./state.js";
+export { shallowMerge } from "./state.js";
 
 // Node
 export type {
