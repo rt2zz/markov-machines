@@ -14,7 +14,7 @@ import {
   isSuspendResult,
 } from "../types/transitions.js";
 import { cede, spawn, suspend } from "../helpers/cede-spawn.js";
-import { deepMerge } from "../types/state.js";
+import { shallowMerge } from "../types/state.js";
 import { createInstance, createSuspendInfo, clearSuspension } from "../types/instance.js";
 
 /**
@@ -51,7 +51,7 @@ export async function executeCommand(
   // Track state updates
   let currentState = instance.state;
   const updateState = (patch: Partial<unknown>) => {
-    currentState = deepMerge(
+    currentState = shallowMerge(
       currentState as Record<string, unknown>,
       patch as Record<string, unknown>,
     );

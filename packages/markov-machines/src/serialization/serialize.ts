@@ -11,6 +11,7 @@ import type { Charter } from "../types/charter.js";
 import type { Transition } from "../types/transitions.js";
 import { isRef, isSerialTransition } from "../types/refs.js";
 import { isCodeTransition, isGeneralTransition } from "../types/transitions.js";
+import { ZOD_JSON_SCHEMA_TARGET_DRAFT_2020_12 } from "../helpers/json-schema.js";
 
 /**
  * Serialize a node to a SerialNode or Ref.
@@ -31,7 +32,9 @@ export function serializeNode<S>(
   }
 
   // Serialize the validator to JSON Schema
-  const validator: Record<string, unknown> = z.toJSONSchema(node.validator, { target: "draft-2020-12" }) as Record<string, unknown>;
+  const validator: Record<string, unknown> = z.toJSONSchema(node.validator, {
+    target: ZOD_JSON_SCHEMA_TARGET_DRAFT_2020_12,
+  }) as Record<string, unknown>;
 
   // Serialize transitions
   const transitions: Record<string, Ref | SerialTransition> = {};
@@ -119,6 +122,7 @@ export function serializeInstance(
     state: instance.state,
     children,
     ...(instance.packStates ? { packStates: instance.packStates } : {}),
+    ...(instance.executorConfig ? { executorConfig: instance.executorConfig } : {}),
     ...(instance.suspended ? {
       suspended: {
         suspendId: instance.suspended.suspendId,

@@ -11,6 +11,7 @@ import type {
 } from "../types/client.js";
 import type { Command, AnyCommandDefinition } from "../types/commands.js";
 import type { JSONSchema } from "../types/refs.js";
+import { ZOD_JSON_SCHEMA_TARGET_DRAFT_2020_12 } from "../helpers/json-schema.js";
 
 /**
  * Create a DryClientNode from a Node.
@@ -20,7 +21,9 @@ export function createDryClientNode<N extends Node>(
   node: N,
 ): DryClientNode<N> {
   // Convert validator to JSON Schema
-  const validator = z.toJSONSchema(node.validator, { target: "draft-2020-12" }) as JSONSchema;
+  const validator = z.toJSONSchema(node.validator, {
+    target: ZOD_JSON_SCHEMA_TARGET_DRAFT_2020_12,
+  }) as JSONSchema;
 
   // Extract command metadata
   const commands: Record<string, CommandMeta> = {};
@@ -30,7 +33,9 @@ export function createDryClientNode<N extends Node>(
       commands[name] = {
         name: command.name,
         description: command.description,
-        inputSchema: z.toJSONSchema(command.inputSchema, { target: "draft-2020-12" }) as JSONSchema,
+        inputSchema: z.toJSONSchema(command.inputSchema, {
+          target: ZOD_JSON_SCHEMA_TARGET_DRAFT_2020_12,
+        }) as JSONSchema,
       };
     }
   }

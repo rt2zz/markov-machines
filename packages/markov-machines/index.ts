@@ -167,4 +167,4 @@ export {
 } from "./src/types/messages.js";
 
 // State helpers
-export { deepMerge } from "./src/types/state.js";
+export { shallowMerge } from "./src/types/state.js";

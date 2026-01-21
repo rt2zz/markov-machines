@@ -75,3 +75,4 @@ Public APIs are exported from `packages/markov-machines/index.ts` including:
 - Should worker nodes be allowed to end_turn? What controls do we need to encourage them to conclude their work correctly? Auto-cede?
 - Allowing packs to be provided at any level of the instance tree (maybe packBoundary option?)
 - Allowing non-current node tools to operate on their respective tool owner's state. Or is this an anti-pattern and should rely on packs instead of inherited tools?
+- State patch semantics: currently `updateState` and helpers use a shallow merge (nested objects are replaced). Revisit whether deep merge is the right default and/or add an opt-in deep merge helper.

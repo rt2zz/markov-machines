@@ -2,6 +2,7 @@ import { v4 as uuid } from "uuid";
 import type { Charter } from "../types/charter.js";
 import type { Machine, MachineConfig } from "../types/machine.js";
 import type { Instance } from "../types/instance.js";
+import type { Pack } from "../types/pack.js";
 
 /**
  * Validate a node instance tree recursively.
@@ -40,6 +41,20 @@ function initializePackStates(charter: Charter): Record<string, unknown> {
     packStates[pack.name] = pack.initialState;
   }
   return packStates;
+}
+
+/**
+ * Get pack state, lazily initializing if not present.
+ * Mutates packStates by adding the initialized state.
+ */
+export function getOrInitPackState(
+  packStates: Record<string, unknown>,
+  pack: Pack<unknown>,
+): unknown {
+  if (!(pack.name in packStates)) {
+    packStates[pack.name] = pack.initialState;
+  }
+  return packStates[pack.name];
 }
 
 /**
