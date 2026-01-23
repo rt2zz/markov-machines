@@ -1,6 +1,7 @@
 import type { Instance } from "../types/instance.js";
 import type { Node } from "../types/node.js";
 import type { Transition } from "../types/transitions.js";
+import type { Charter } from "../types/charter.js";
 
 export interface SystemPromptOptions {
   currentStep?: number;
@@ -9,16 +10,38 @@ export interface SystemPromptOptions {
 
 /**
  * Build the complete system prompt for a node execution.
- * Includes node instructions, current state, available transitions,
- * ancestor context, pack states, and step warnings.
- * For worker nodes, pack context is omitted.
+ * If the charter has a custom buildSystemPrompt function, it will be used.
+ * Otherwise, the default system prompt builder is used.
  */
 export function buildSystemPrompt<S>(
+  charter: Charter,
   node: Node<S>,
   state: S,
   ancestors: Instance[],
   packStates: Record<string, unknown>,
-  options?: SystemPromptOptions,
+  options?: SystemPromptOptions
+): string {
+  // Use custom builder if provided by charter
+  if (charter.buildSystemPrompt) {
+    return charter.buildSystemPrompt(charter, node, state, ancestors, packStates, options)
+  }
+
+  // Fall back to default system prompt builder
+  return buildDefaultSystemPrompt(node, state, ancestors, packStates, options)
+}
+
+/**
+ * Default system prompt builder.
+ * Includes node instructions, current state, available transitions,
+ * ancestor context, pack states, and step warnings.
+ * For worker nodes, pack context is omitted.
+ */
+export function buildDefaultSystemPrompt<S>(
+  node: Node<S>,
+  state: S,
+  ancestors: Instance[],
+  packStates: Record<string, unknown>,
+  options?: SystemPromptOptions
 ): string {
   let prompt = `${node.instructions}
 

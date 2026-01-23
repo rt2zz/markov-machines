@@ -106,6 +106,7 @@ export class StandardExecutor implements Executor<unknown> {
 
     // Build system prompt (delegated)
     const systemPrompt = buildSystemPrompt(
+      charter,
       currentNode,
       currentState,
       ancestors,
@@ -148,17 +149,14 @@ export class StandardExecutor implements Executor<unknown> {
     const effectiveTemperature = execConfig.temperature as number | undefined; // undefined = use API default
 
     // Build structured output format if node has output config (beta feature)
-    let outputFormat: { type: "json_schema"; json_schema: { name: string; schema: unknown } } | undefined;
+    let outputFormat: { type: "json_schema"; schema: unknown } | undefined;
     if (currentNode.output?.schema) {
       const jsonSchema: Record<string, unknown> = z.toJSONSchema(currentNode.output.schema, {
         target: ZOD_JSON_SCHEMA_TARGET_OPENAPI_3,
       }) as Record<string, unknown>;
       outputFormat = {
         type: "json_schema",
-        json_schema: {
-          name: `${currentNode.id}_output`,
-          schema: jsonSchema,
-        },
+        schema: jsonSchema,
       };
     }
 
@@ -239,14 +237,22 @@ export class StandardExecutor implements Executor<unknown> {
       currentState = toolResult.currentState;
       packStates = toolResult.packStates;
 
-      // Add tool results to messages
+      // Add tool results to messages (role: user)
       if (toolResult.toolResults.length > 0) {
         const toolResultMsg = userMessage(toolResult.toolResults, instance.id);
         newMessages.push(toolResultMsg);
       }
 
-      // Execute queued transition if any
-      if (toolResult.queuedTransition) {
+      // Add assistant messages from toolReply (role: assistant)
+      if (toolResult.assistantMessages.length > 0) {
+        const assistantMsg = assistantMessage(toolResult.assistantMessages, instance.id);
+        newMessages.push(assistantMsg);
+      }
+
+      // Handle terminal tools - force end turn immediately
+      if (toolResult.terminal) {
+        yieldReason = 'end_turn';
+      } else if (toolResult.queuedTransition) {
         const transition = currentNode.transitions[toolResult.queuedTransition.name];
         if (!transition) {
           throw new Error(`Unknown transition: ${toolResult.queuedTransition.name}`);

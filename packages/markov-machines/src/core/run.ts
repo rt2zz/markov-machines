@@ -309,7 +309,6 @@ export async function* runMachine<AppMessage = unknown>(
 
     // Get all active leaves for parallel execution
     const activeLeaves = getActiveLeaves(currentInstance);
-
     if (activeLeaves.length === 0) {
       // Check if all leaves are suspended
       const suspendedInstances = getSuspendedInstances(currentInstance);

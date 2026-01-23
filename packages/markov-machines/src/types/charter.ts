@@ -3,6 +3,22 @@ import type { Transition } from "./transitions.js";
 import type { Node } from "./node.js";
 import type { Executor } from "../executor/types.js";
 import type { Pack } from "./pack.js";
+import type { Instance } from "./instance.js";
+import type { SystemPromptOptions } from "../runtime/system-prompt.js";
+
+/**
+ * Custom system prompt builder function type.
+ * Allows applications to override the default system prompt generation.
+ * @typeParam AppMessage - The application message type for structured outputs.
+ */
+export type SystemPromptBuilder<AppMessage = unknown> = <S>(
+  charter: Charter,
+  node: Node<S, AppMessage>,
+  state: S,
+  ancestors: Instance[],
+  packStates: Record<string, unknown>,
+  options?: SystemPromptOptions
+) => string;
 
 /**
  * Charter configuration for createCharter.
@@ -24,6 +40,11 @@ export interface CharterConfig<AppMessage = unknown> {
   nodes?: Record<string, Node<unknown, AppMessage> | Node<unknown, never>>;
   /** Registered packs (reusable modules with state and tools) */
   packs?: Pack<unknown>[];
+  /**
+   * Optional custom system prompt builder.
+   * If provided, this function will be used instead of the default system prompt builder.
+   */
+  buildSystemPrompt?: SystemPromptBuilder<AppMessage>;
 }
 
 /**
@@ -46,4 +67,9 @@ export interface Charter<AppMessage = unknown> {
   nodes: Record<string, Node<unknown, AppMessage> | Node<unknown, never>>;
   /** Registered packs */
   packs: Pack<unknown>[];
+  /**
+   * Optional custom system prompt builder.
+   * If provided, this function will be used instead of the default system prompt builder.
+   */
+  buildSystemPrompt?: SystemPromptBuilder<AppMessage>;
 }
