@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { api } from "./_generated/api";
+import { z } from "zod";
 import {
   runCommand,
   createMachine,
@@ -12,6 +13,23 @@ import {
   type Message,
 } from "markov-machines";
 import { demoCharter } from "../src/agent/charter";
+
+// Escape $ prefixed fields from JSON schema (Convex doesn't allow $ fields)
+// $schema -> __$schema, $ref -> __$ref, etc.
+function escapeDollarFields(obj: unknown): unknown {
+  if (Array.isArray(obj)) {
+    return obj.map(escapeDollarFields);
+  }
+  if (obj && typeof obj === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const escapedKey = key.startsWith("$") ? `__${key}` : key;
+      result[escapedKey] = escapeDollarFields(value);
+    }
+    return result;
+  }
+  return obj;
+}
 
 // Filter out messages with empty content (Anthropic API requires non-empty content)
 function filterValidMessages(messages: Message[]): Message[] {
@@ -49,7 +67,7 @@ export const executeCommand = action({
       history: filterValidMessages(history as Message[]),
     });
 
-    const { machine: updatedMachine, result } = await runCommand(
+    const { machine: updatedMachine, result, replyMessages } = await runCommand(
       machine,
       commandName,
       input,
@@ -75,7 +93,7 @@ export const executeCommand = action({
       turnId,
       stepNumber: 1,
       yieldReason: "command",
-      response: JSON.stringify(result.value),
+      response: JSON.stringify(result),
       done: true,
       messages: [],
       instance: serializeInstance(updatedMachine.instance, demoCharter),
@@ -88,9 +106,18 @@ export const executeCommand = action({
       messages: [],
     });
 
+    if (replyMessages?.userMessage) {
+      await ctx.runMutation(api.messages.add, {
+        sessionId,
+        role: "assistant",
+        content: String(replyMessages.userMessage),
+        turnId,
+      });
+    }
+
     return {
       success: true,
-      value: result.value,
+      value: result,
     };
   },
 });
@@ -112,6 +139,13 @@ export const getCommands = action({
       history: [],
     });
 
-    return getAvailableCommands(machine);
+    const commands = getAvailableCommands(machine);
+
+    // Convert Zod schemas to JSON-serializable format (escape $ fields for Convex)
+    return commands.map((cmd) => ({
+      name: cmd.name,
+      description: cmd.description,
+      inputSchema: escapeDollarFields(z.toJSONSchema(cmd.inputSchema)),
+    }));
   },
 });

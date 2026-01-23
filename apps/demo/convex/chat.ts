@@ -67,17 +67,20 @@ export const send = action({
       history: filterValidMessages(history as Message[]),
     });
 
-    await ctx.runMutation(api.messages.add, {
-      sessionId,
-      role: "user",
-      content: message,
-    });
-
+    // Create turn first so user message can be associated with it
     const turnId = await ctx.runMutation(api.machineTurns.create, {
       sessionId,
       parentId: session.turnId,
       instanceId: machine.instance.id,
       instance: serializeInstance(machine.instance, demoCharter),
+    });
+
+    // Add user message with turnId for proper time travel filtering
+    await ctx.runMutation(api.messages.add, {
+      sessionId,
+      role: "user",
+      content: message,
+      turnId,
     });
 
     let stepNumber = 0;

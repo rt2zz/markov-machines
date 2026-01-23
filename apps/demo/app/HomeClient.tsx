@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { inputAtom, isLoadingAtom, scanlinesEnabledAtom } from "@/src/atoms";
+import {
+  inputAtom,
+  isLoadingAtom,
+  scanlinesEnabledAtom,
+  selectedStepIdAtom,
+  isPreviewingAtom,
+} from "@/src/atoms";
 import { useSessionId } from "@/src/hooks";
 import { TerminalPane } from "./components/terminal/TerminalPane";
 import { AgentPane } from "./components/agent/AgentPane";
@@ -19,12 +25,26 @@ export function HomeClient({
   const [input, setInput] = useAtom(inputAtom);
   const [isLoading, setIsLoading] = useAtom(isLoadingAtom);
   const scanlinesEnabled = useAtomValue(scanlinesEnabledAtom);
+  const selectedStepId = useAtomValue(selectedStepIdAtom);
+  const isPreviewing = useAtomValue(isPreviewingAtom);
 
   const createSession = useAction(api.chat.createSession);
   const sendMessage = useAction(api.chat.send);
+
+  // Query the previewed step to get its turnId for filtering messages
+  const previewedStep = useQuery(
+    api.machineSteps.getById,
+    selectedStepId ? { stepId: selectedStepId } : "skip"
+  );
+
+  // Determine which turnId to filter messages by
+  const effectiveTurnId =
+    isPreviewing && previewedStep?.turnId ? previewedStep.turnId : undefined;
+
+  // Use turn-aware messages query for time travel support
   const messages = useQuery(
-    api.messages.list,
-    sessionId ? { sessionId } : "skip"
+    api.messages.listForTurnPath,
+    sessionId ? { sessionId, upToTurnId: effectiveTurnId } : "skip"
   );
   const session = useQuery(api.sessions.get, sessionId ? { id: sessionId } : "skip");
 
@@ -61,6 +81,11 @@ export function HomeClient({
     }
   };
 
+  const handleResetSession = useCallback(() => {
+    // Clear session - useEffect will create a new one
+    setSessionId(null);
+  }, [setSessionId]);
+
   if (!sessionId) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -86,7 +111,11 @@ export function HomeClient({
       {/* Right side - Agent pane */}
       <div className="w-1/2 h-full relative">
         {scanlinesEnabled && <div className="terminal-scanlines absolute inset-0" />}
-        <AgentPane sessionId={sessionId} instance={session?.instance} />
+        <AgentPane
+          sessionId={sessionId}
+          instance={session?.instance}
+          onResetSession={handleResetSession}
+        />
       </div>
     </div>
   );

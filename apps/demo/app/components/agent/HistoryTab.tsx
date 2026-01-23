@@ -23,6 +23,7 @@ const subtabs: { id: HistorySubtab; label: string }[] = [
   { id: "steps", label: "Steps" },
   { id: "turns", label: "Turns" },
   { id: "messages", label: "Messages" },
+  { id: "branches", label: "Branches" },
 ];
 
 export function HistoryTab({ sessionId }: HistoryTabProps) {
@@ -55,6 +56,7 @@ export function HistoryTab({ sessionId }: HistoryTabProps) {
         {activeSubtab === "steps" && <StepsView sessionId={sessionId} />}
         {activeSubtab === "turns" && <TurnsView sessionId={sessionId} />}
         {activeSubtab === "messages" && <MessagesView sessionId={sessionId} />}
+        {activeSubtab === "branches" && <BranchesView sessionId={sessionId} />}
       </div>
     </div>
   );
@@ -191,74 +193,265 @@ function TurnsView({ sessionId }: { sessionId: Id<"sessions"> }) {
 }
 
 function MessagesView({ sessionId }: { sessionId: Id<"sessions"> }) {
-  const history = useQuery(api.sessions.getFullHistory, { sessionId }) as unknown[] | undefined;
+  const messages = useQuery(api.messages.list, { sessionId });
+  const session = useQuery(api.sessions.get, { id: sessionId });
+  const timeTravel = useMutation(api.sessions.timeTravel);
 
-  if (!history) {
+  if (!messages) {
     return <div className="text-terminal-green-dimmer">Loading...</div>;
   }
 
-  if (history.length === 0) {
+  if (messages.length === 0) {
     return <div className="text-terminal-green-dimmer italic">No messages yet</div>;
   }
 
+  const handleMessageClick = async (turnId: Id<"machineTurns"> | undefined) => {
+    if (turnId && turnId !== session?.turnId) {
+      await timeTravel({ sessionId, targetTurnId: turnId });
+    }
+  };
+
   return (
     <div className="space-y-3">
-      {history.slice(-100).map((msg, i) => {
-        const message = msg as { role: string; content: unknown[] };
+      {messages.slice(-100).map((msg) => {
+        const isCurrent = msg.turnId === session?.turnId;
+        const canTimeTravel = msg.turnId && !isCurrent;
+
         return (
           <div
-            key={i}
-            className="p-2 rounded border border-terminal-green-dimmer"
+            key={msg._id}
+            onClick={() => canTimeTravel && handleMessageClick(msg.turnId)}
+            className={`
+              p-2 rounded border transition-colors
+              ${isCurrent
+                ? "border-terminal-green bg-terminal-bg-lighter"
+                : "border-terminal-green-dimmer"
+              }
+              ${canTimeTravel ? "cursor-pointer hover:border-terminal-green-dim" : ""}
+            `}
           >
-            <div className="text-terminal-cyan text-xs mb-1">{message.role}</div>
-            <div className="text-xs">
-              {Array.isArray(message.content) ? (
-                message.content.map((block: unknown, j: number) => {
-                  const b = block as { type: string; text?: string; name?: string; input?: unknown };
-                  if (b.type === "text") {
-                    return (
-                      <div key={j} className="text-terminal-green-dim">
-                        {(b.text || "").slice(0, 200)}
-                        {(b.text || "").length > 200 && "..."}
-                      </div>
-                    );
-                  }
-                  if (b.type === "tool_use") {
-                    return (
-                      <div key={j} className="text-terminal-yellow">
-                        [Tool: {b.name}]
-                      </div>
-                    );
-                  }
-                  if (b.type === "tool_result") {
-                    return (
-                      <div key={j} className="text-terminal-cyan">
-                        [Tool Result]
-                      </div>
-                    );
-                  }
-                  if (b.type === "thinking") {
-                    return (
-                      <div key={j} className="text-terminal-green-dimmer italic">
-                        [Thinking...]
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={j} className="text-terminal-green-dimmer">
-                      [{b.type}]
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-terminal-green-dim">
-                  {String(message.content).slice(0, 200)}
-                </div>
+            <div className="flex items-center justify-between">
+              <span className="text-terminal-cyan text-xs">{msg.role}</span>
+              {isCurrent && <span className="text-terminal-green text-xs">[current]</span>}
+              {canTimeTravel && (
+                <span className="text-terminal-cyan text-xs opacity-50 hover:opacity-100">
+                  [click to travel]
+                </span>
               )}
+            </div>
+            <div className="text-xs text-terminal-green-dim mt-1">
+              {msg.content.slice(0, 200)}
+              {msg.content.length > 200 && "..."}
             </div>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Types for branch visualization
+interface TurnNode {
+  id: Id<"machineTurns">;
+  parentId?: Id<"machineTurns">;
+  createdAt: number;
+  messageCount: number;
+  isCurrent: boolean;
+  children: Id<"machineTurns">[];
+  depth: number;
+  isInCurrentPath: boolean;
+  isBranchPoint: boolean;
+}
+
+interface TurnTreeViz {
+  nodes: Map<string, TurnNode>;
+  root: TurnNode | null;
+  currentPath: Set<string>;
+  branchCount: number;
+  maxDepth: number;
+}
+
+function buildTurnTreeViz(
+  turns: MachineTurn[],
+  currentTurnId: Id<"machineTurns"> | undefined
+): TurnTreeViz {
+  const nodes = new Map<string, TurnNode>();
+  const childMap = new Map<string, Id<"machineTurns">[]>();
+
+  // First pass: create nodes and build child relationships
+  let root: TurnNode | null = null;
+  for (const turn of turns) {
+    const node: TurnNode = {
+      id: turn._id,
+      parentId: turn.parentId,
+      createdAt: turn.createdAt,
+      messageCount: turn.messages.length,
+      isCurrent: turn._id === currentTurnId,
+      children: [],
+      depth: 0,
+      isInCurrentPath: false,
+      isBranchPoint: false,
+    };
+    nodes.set(turn._id, node);
+
+    if (!turn.parentId) {
+      root = node;
+    } else {
+      if (!childMap.has(turn.parentId)) {
+        childMap.set(turn.parentId, []);
+      }
+      childMap.get(turn.parentId)!.push(turn._id);
+    }
+  }
+
+  // Second pass: assign children and mark branch points
+  let branchCount = 0;
+  for (const [parentId, children] of childMap.entries()) {
+    const node = nodes.get(parentId);
+    if (node) {
+      node.children = children.sort((a, b) => {
+        const nodeA = nodes.get(a);
+        const nodeB = nodes.get(b);
+        return (nodeA?.createdAt ?? 0) - (nodeB?.createdAt ?? 0);
+      });
+      if (children.length > 1) {
+        node.isBranchPoint = true;
+        branchCount++;
+      }
+    }
+  }
+
+  // Calculate depths
+  let maxDepth = 0;
+  const calculateDepth = (nodeId: string, depth: number) => {
+    const node = nodes.get(nodeId);
+    if (!node) return;
+    node.depth = depth;
+    maxDepth = Math.max(maxDepth, depth);
+    for (const childId of node.children) {
+      calculateDepth(childId, depth + 1);
+    }
+  };
+  if (root) {
+    calculateDepth(root.id, 0);
+  }
+
+  // Build current path (trace from current to root)
+  const currentPath = new Set<string>();
+  if (currentTurnId) {
+    let curr: string | undefined = currentTurnId;
+    while (curr) {
+      currentPath.add(curr);
+      const node = nodes.get(curr);
+      if (node) {
+        node.isInCurrentPath = true;
+      }
+      curr = node?.parentId;
+    }
+  }
+
+  return { nodes, root, currentPath, branchCount, maxDepth };
+}
+
+function BranchesView({ sessionId }: { sessionId: Id<"sessions"> }) {
+  const turnTree = useQuery(api.sessions.getTurnTree, { sessionId });
+  const timeTravel = useMutation(api.sessions.timeTravel);
+
+  if (!turnTree) {
+    return <div className="text-terminal-green-dimmer">Loading...</div>;
+  }
+
+  if (turnTree.turns.length === 0) {
+    return <div className="text-terminal-green-dimmer italic">No turns yet</div>;
+  }
+
+  const viz = buildTurnTreeViz(turnTree.turns, turnTree.currentTurnId);
+
+  if (!viz.root) {
+    return <div className="text-terminal-green-dimmer italic">No root turn found</div>;
+  }
+
+  const handleTimeTravel = async (turnId: Id<"machineTurns">) => {
+    if (turnId !== turnTree.currentTurnId) {
+      await timeTravel({ sessionId, targetTurnId: turnId });
+    }
+  };
+
+  // Render a single node line
+  const renderNode = (
+    node: TurnNode,
+    prefix: string,
+    isLast: boolean
+  ): JSX.Element[] => {
+    const connector = isLast ? "└── " : "├── ";
+    const time = new Date(node.createdAt).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    const elements: JSX.Element[] = [];
+
+    // Current node
+    elements.push(
+      <div
+        key={node.id}
+        onClick={() => handleTimeTravel(node.id)}
+        className={`
+          flex items-center gap-1 cursor-pointer hover:bg-terminal-bg-lighter py-0.5
+          ${node.isInCurrentPath ? "text-terminal-green" : "text-terminal-green-dim"}
+        `}
+      >
+        <span className="text-terminal-green-dimmer select-none whitespace-pre">
+          {prefix}
+          {connector}
+        </span>
+        <span className={node.isCurrent ? "text-terminal-green font-bold" : ""}>
+          {time}
+        </span>
+        <span className="text-terminal-green-dimmer">[{node.messageCount}]</span>
+        {node.isBranchPoint && <span className="text-terminal-yellow">◆</span>}
+        {node.isCurrent && <span className="text-terminal-cyan">✦</span>}
+      </div>
+    );
+
+    // Render children
+    const childPrefix = prefix + (isLast ? "    " : "│   ");
+    node.children.forEach((childId, index) => {
+      const childNode = viz.nodes.get(childId);
+      if (childNode) {
+        const isLastChild = index === node.children.length - 1;
+        elements.push(...renderNode(childNode, childPrefix, isLastChild));
+      }
+    });
+
+    return elements;
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header stats */}
+      <div className="text-terminal-cyan text-xs border-b border-terminal-green-dimmer pb-2">
+        {viz.maxDepth + 1} levels · {viz.nodes.size} turns · {viz.branchCount}{" "}
+        branch{viz.branchCount !== 1 ? "es" : ""}
+      </div>
+
+      {/* Tree visualization */}
+      <div className="font-mono text-xs">{renderNode(viz.root, "", true)}</div>
+
+      {/* Legend */}
+      <div className="text-terminal-green-dimmer text-xs border-t border-terminal-green-dimmer pt-2 space-y-1">
+        <div>
+          <span className="text-terminal-yellow">◆</span> = Branch point
+        </div>
+        <div>
+          <span className="text-terminal-cyan">✦</span> = Current turn
+        </div>
+        <div>[n] = Message count</div>
+        <div className="text-terminal-green-dim mt-2">
+          Click any turn to time travel
+        </div>
+      </div>
     </div>
   );
 }

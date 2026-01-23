@@ -8,6 +8,7 @@ const tabs: { id: AgentTab; label: string }[] = [
   { id: "state", label: "State" },
   { id: "history", label: "History" },
   { id: "commands", label: "Commands" },
+  { id: "dev", label: "Dev" },
 ];
 
 export function TabNav() {

@@ -11,7 +11,7 @@ import { InstanceTreeTab } from "./InstanceTreeTab";
 import { StateTab } from "./StateTab";
 import { HistoryTab } from "./HistoryTab";
 import { CommandsTab } from "./CommandsTab";
-import type { CommandInfo } from "markov-machines";
+import { DevTab } from "./DevTab";
 
 interface SerializedInstance {
   id: string;
@@ -22,19 +22,26 @@ interface SerializedInstance {
   suspended?: { reason: string };
 }
 
+interface SerializedCommandInfo {
+  name: string;
+  description: string;
+  inputSchema: { type: string; properties?: Record<string, unknown> };
+}
+
 interface AgentPaneProps {
   sessionId: Id<"sessions">;
   instance: SerializedInstance | undefined;
+  onResetSession: () => void;
 }
 
-export function AgentPane({ sessionId, instance }: AgentPaneProps) {
+export function AgentPane({ sessionId, instance, onResetSession }: AgentPaneProps) {
   const activeTab = useAtomValue(activeAgentTabAtom);
   const getCommands = useAction(api.commands.getCommands);
-  const [commands, setCommands] = useState<CommandInfo[]>([]);
+  const [commands, setCommands] = useState<SerializedCommandInfo[]>([]);
 
   useEffect(() => {
     if (sessionId) {
-      getCommands({ sessionId }).then((cmds) => setCommands(cmds as CommandInfo[])).catch(console.error);
+      getCommands({ sessionId }).then((cmds) => setCommands(cmds as SerializedCommandInfo[])).catch(console.error);
     }
   }, [sessionId, instance, getCommands]);
 
@@ -60,6 +67,7 @@ export function AgentPane({ sessionId, instance }: AgentPaneProps) {
         {activeTab === "commands" && (
           <CommandsTab sessionId={sessionId} commands={commands} />
         )}
+        {activeTab === "dev" && <DevTab onResetSession={onResetSession} />}
       </div>
     </div>
   );

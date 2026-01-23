@@ -38,7 +38,11 @@ export async function runCommand<AppMessage = unknown>(
   commandName: string,
   input: unknown = {},
   instanceId?: string,
-): Promise<{ machine: Machine<AppMessage>; result: CommandExecutionResult }> {
+): Promise<{
+  machine: Machine<AppMessage>;
+  result: CommandExecutionResult;
+  replyMessages?: { userMessage: unknown; llmMessage: string };
+}> {
   // Find the target instance
   let target: Instance;
   if (instanceId) {
@@ -54,8 +58,8 @@ export async function runCommand<AppMessage = unknown>(
     target = getActiveInstance(machine.instance);
   }
 
-  const { result, instance: updatedInstance, transitionResult } =
-    await executeCommandOnInstance(target, commandName, input);
+  const { result, instance: updatedInstance, transitionResult, replyMessages } =
+    await executeCommandOnInstance(target, commandName, input, target.id, machine.history);
 
   if (!result.success) {
     return { machine, result };
@@ -73,6 +77,7 @@ export async function runCommand<AppMessage = unknown>(
     return {
       machine: { ...machine, instance: updatedRoot },
       result,
+      replyMessages,
     };
   }
 
@@ -82,6 +87,7 @@ export async function runCommand<AppMessage = unknown>(
   return {
     machine: { ...machine, instance: updatedRoot },
     result,
+    replyMessages,
   };
 }
 

@@ -4,11 +4,16 @@ import { useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import type { CommandInfo } from "markov-machines";
+
+interface SerializedCommandInfo {
+  name: string;
+  description: string;
+  inputSchema: { type: string; properties?: Record<string, unknown> };
+}
 
 interface CommandsTabProps {
   sessionId: Id<"sessions">;
-  commands: CommandInfo[];
+  commands: SerializedCommandInfo[];
 }
 
 export function CommandsTab({ sessionId, commands }: CommandsTabProps) {
@@ -34,7 +39,7 @@ function CommandCard({
   command,
 }: {
   sessionId: Id<"sessions">;
-  command: CommandInfo;
+  command: SerializedCommandInfo;
 }) {
   const [input, setInput] = useState("{}");
   const [result, setResult] = useState<string | null>(null);
@@ -43,7 +48,9 @@ function CommandCard({
 
   const executeCommand = useAction(api.commands.executeCommand);
 
-  const hasInput = JSON.stringify(command.inputSchema) !== '{"type":"object","properties":{}}';
+  // Check if the input schema has any properties
+  const hasInput = command.inputSchema.properties &&
+    Object.keys(command.inputSchema.properties).length > 0;
 
   const handleExecute = async () => {
     setIsExecuting(true);

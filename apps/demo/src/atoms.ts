@@ -9,7 +9,7 @@ export const isLoadingAtom = atom<boolean>(false);
 export const scanlinesEnabledAtom = atom<boolean>(true);
 
 // Agent pane tabs
-export type AgentTab = "tree" | "state" | "history" | "commands";
+export type AgentTab = "tree" | "state" | "history" | "commands" | "dev";
 export const activeAgentTabAtom = atom<AgentTab>("tree");
 
 // Tree subtabs
@@ -17,7 +17,7 @@ export type TreeSubtab = "server" | "client";
 export const activeTreeSubtabAtom = atom<TreeSubtab>("server");
 
 // History subtabs
-export type HistorySubtab = "steps" | "turns" | "messages";
+export type HistorySubtab = "steps" | "turns" | "messages" | "branches";
 export const activeHistorySubtabAtom = atom<HistorySubtab>("steps");
 
 // Step preview state
