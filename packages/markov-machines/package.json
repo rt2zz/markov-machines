@@ -12,14 +12,14 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/uuid": "^11.0.0",
-    "vitest": "^4.0.17"
+    "vitest": "^4.0.17",
+    "zod": "^4.0.0"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "zod": "catalog:"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
-    "uuid": "^13.0.0",
-    "zod": "catalog:"
+    "uuid": "^13.0.0"
   }
 }

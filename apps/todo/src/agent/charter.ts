@@ -6,9 +6,8 @@ import {
 	createTransition,
 	transitionTo,
 	spawn,
-	type Pack,
-	type TransitionResult,
 	type Node,
+	type TransitionResult,
 } from "markov-machines";
 import {
 	listTodos,
@@ -22,6 +21,18 @@ import {
 } from "./tools";
 import { guidancePack } from "./packs/guidance";
 import { productResearcherNode } from "./nodes/productResearcher";
+
+
+const appMessageSchema = z.object({
+	title: z.string(),
+	description: z.string(),
+	metadata: z.record(z.string(), z.any()),
+})
+type AppMessage = {
+	title: string,
+	description: string,
+	metadata: Record<string, any>,
+}
 
 // State validators
 export const todoStateValidator = z.object({
@@ -45,9 +56,10 @@ export const archiveStateValidator = z.object({
 });
 
 // Create archive node first
+// Explicit type annotation to break circular reference with mainNode
 const archiveNode = createNode({
 	instructions: `You are viewing the archive of completed todos.
-	
+
 	Available actions:
 	- Use listArchivedTodos to see all archived (completed) todos
 - Use clearArchive to delete all archived todos
@@ -61,18 +73,20 @@ Be concise and helpful.`,
 	},
 	validator: archiveStateValidator,
 	transitions: {
-		backToMain: createTransition({
+		backToMain: createTransition<ArchiveState>({
 			description: "Return to the main todo list",
-			execute: () => transitionTo(mainNode, undefined),
+			execute: (): TransitionResult => transitionTo(mainNode, undefined),
 		}),
 	},
 	initialState: { archivedTodos: [] },
 });
 
 // Create main node
+// Explicit type annotation to break circular reference with archiveNode
+// Uses Node<never, any> to opt out of state contravariance checking
 const mainNode = createNode({
 	instructions: `You are a helpful todo assistant. Help users manage their todos.
-	
+
 	Available actions:
 	- Use listTodos to see current todos
 - Use addTodo to create new todos
@@ -95,14 +109,14 @@ Be concise and helpful.`,
 	},
 	validator: todoStateValidator,
 	transitions: {
-		toArchive: createTransition({
+		toArchive: createTransition<TodoState>({
 			description: "View the archive of completed todos",
 			execute: (state): TransitionResult =>
 				transitionTo(archiveNode, {
 					archivedTodos: state.todos.filter((t) => t.completed),
-				}) as TransitionResult,
+				}),
 		}),
-		spawnResearcher: createTransition({
+		spawnResearcher: createTransition<TodoState>({
 			description:
 				"Spawn a product researcher to investigate a product. Use when user needs help researching something to buy. Pass any relevant guidance from the guidance pack.",
 			arguments: z.object({
@@ -112,7 +126,7 @@ Be concise and helpful.`,
 					.optional()
 					.describe("Relevant user preferences (materials, budget, etc.), if any"),
 			}),
-			execute: (_state, ctx) => {
+			execute: (_state, ctx): TransitionResult => {
 				const args = ctx.args as { query: string; guidance?: string };
 				return spawn(productResearcherNode, {
 					query: args.query,
@@ -127,19 +141,19 @@ Be concise and helpful.`,
 });
 
 // Create charter with single executor
-export const todoCharter = createCharter({
+export const todoCharter = createCharter<AppMessage>({
 	name: "todo-assistant",
 	executor: createStandardExecutor({
 		apiKey: process.env.ANTHROPIC_API_KEY,
-		model: "claude-sonnet-4-20250514",
+		model: "claude-sonnet-4-5",
 		maxTokens: 1024 * 10,
 		debug: false,
 	}),
-	packs: [guidancePack as Pack],
+	packs: [guidancePack],
 	nodes: {
-		mainNode: mainNode as Node<unknown>,
-		archiveNode: archiveNode as Node<unknown>,
-		productResearcherNode: productResearcherNode as Node<unknown>,
+		mainNode,
+		archiveNode,
+		productResearcherNode,
 	},
 });
 

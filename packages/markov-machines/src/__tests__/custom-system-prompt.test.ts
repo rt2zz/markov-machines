@@ -37,7 +37,7 @@ describe('Custom System Prompt Builder', () => {
 
     const customBuilder = <S>(
       charter: Charter,
-      node: Node<S>,
+      node: Node<any, S>,
       state: S,
       ancestors: Instance[],
       packStates: Record<string, unknown>
@@ -59,7 +59,7 @@ describe('Custom System Prompt Builder', () => {
 
   it('should pass all parameters to custom builder', () => {
     let capturedParams: {
-      node: Node<any>
+      node: Node<any, any>
       state: any
       ancestors: Instance[]
       packStates: Record<string, unknown>
@@ -68,7 +68,7 @@ describe('Custom System Prompt Builder', () => {
 
     const customBuilder = <S>(
       charter: Charter,
-      node: Node<S>,
+      node: Node<any, S>,
       state: S,
       ancestors: Instance[],
       packStates: Record<string, unknown>,
@@ -143,7 +143,7 @@ describe('Custom System Prompt Builder', () => {
 
     const customBuilder = <S>(
       charter: Charter,
-      node: Node<S>,
+      node: Node<any, S>,
       state: S,
       ancestors: Instance[],
       packStates: Record<string, unknown>
@@ -151,6 +151,7 @@ describe('Custom System Prompt Builder', () => {
       // In real implementation, node.id would be used to lookup metadata
       const nodeId = node.instructions.includes('Manager') ? 'manager' : 'troubleshooter'
       const metadata = nodeMetadata[nodeId]
+      if (!metadata) return node.instructions
       return `${metadata.role}\n\nPurpose: ${metadata.purpose}\n\n${node.instructions}`
     }
 
@@ -178,7 +179,7 @@ describe('Custom System Prompt Builder', () => {
 
     const customBuilder = <S>(
       charter: Charter,
-      node: Node<S>,
+      node: Node<any, S>,
       state: S,
       ancestors: Instance[],
       packStates: Record<string, unknown>

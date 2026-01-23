@@ -14,8 +14,8 @@ export interface SystemPromptOptions {
  * Otherwise, the default system prompt builder is used.
  */
 export function buildSystemPrompt<S>(
-  charter: Charter,
-  node: Node<S>,
+  charter: Charter<any>,
+  node: Node<any, S>,
   state: S,
   ancestors: Instance[],
   packStates: Record<string, unknown>,
@@ -37,7 +37,7 @@ export function buildSystemPrompt<S>(
  * For worker nodes, pack context is omitted.
  */
 export function buildDefaultSystemPrompt<S>(
-  node: Node<S>,
+  node: Node<any, S>,
   state: S,
   ancestors: Instance[],
   packStates: Record<string, unknown>,
@@ -57,7 +57,7 @@ ${buildTransitionsSection(node.transitions)}`;
   // Add active packs section (only for non-worker nodes)
   // Worker nodes don't have packs and shouldn't see pack context
   if (!node.worker) {
-    const packsSection = buildPacksSection(node as Node<S>, packStates);
+    const packsSection = buildPacksSection(node, packStates);
     if (packsSection) {
       prompt += `\n\n${packsSection}`;
     }
@@ -120,7 +120,7 @@ ${sections.join("\n\n")}`;
  * Build the active packs section of the system prompt.
  */
 export function buildPacksSection<S>(
-  node: Node<S>,
+  node: Node<any, S>,
   packStates: Record<string, unknown>,
 ): string {
   const activePacks = node.packs ?? [];

@@ -271,7 +271,7 @@ export async function* runMachine<AppMessage = unknown>(
 
   // Handle Command input
   if (isCommand(input)) {
-    const { machine: updatedMachine, result } = await runCommand(
+    const { machine: updatedMachine, result } = await runCommand<AppMessage>(
       machine,
       input.name,
       input.input,

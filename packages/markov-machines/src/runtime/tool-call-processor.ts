@@ -25,20 +25,20 @@ const TOOL_TRANSITION = "transition";
 const TRANSITION_PREFIX = "transition_";
 
 export interface ToolCallContext {
-  charter: Charter;
+  charter: Charter<any>;
   instance: Instance;
   ancestors: Instance[];
   packStates: Record<string, unknown>;
   currentState: unknown;
-  currentNode: Node<unknown>;
+  currentNode: Node<any, unknown>;
   /** Conversation history for getInstanceMessages */
   history?: Message<unknown>[];
 }
 
-export interface ToolCallResult {
+export interface ToolCallResult<AppMessage = unknown> {
   toolResults: ToolResultBlock[];
   /** Assistant messages from toolReply userMessage (should be role: assistant) */
-  assistantMessages: (TextBlock | OutputBlock<unknown>)[];
+  assistantMessages: (TextBlock | OutputBlock<AppMessage>)[];
   currentState: unknown;
   packStates: Record<string, unknown>;
   queuedTransition?: { name: string; reason: string; args: unknown };
@@ -67,7 +67,7 @@ interface RegularToolResult {
   newCurrentState: unknown;
   toolResult: ToolResultBlock;
   /** Assistant content from toolReply userMessage (should be role: assistant) */
-  assistantContent?: TextBlock | OutputBlock<unknown>;
+  assistantContent?: TextBlock | OutputBlock<any>;
   /** If true, this tool is terminal and the turn should end */
   terminal?: boolean;
 }
@@ -79,7 +79,7 @@ function handleUpdateStateTool(
   id: string,
   toolInput: unknown,
   currentState: unknown,
-  validator: Node<unknown>["validator"],
+  validator: Node<any, unknown>["validator"],
 ): UpdateStateResult {
   const patch = (toolInput as { patch: Partial<unknown> }).patch;
   const result = updateState(currentState, patch, validator);
@@ -281,12 +281,12 @@ async function handleRegularTool(
  * Process tool calls from an API response.
  * Handles updateState, transitions, pack tools, and regular node tools.
  */
-export async function processToolCalls(
+export async function processToolCalls<AppMessage = unknown>(
   ctx: ToolCallContext,
   toolCalls: ToolCall[],
-): Promise<ToolCallResult> {
+): Promise<ToolCallResult<AppMessage>> {
   const toolResults: ToolResultBlock[] = [];
-  const assistantMessages: (TextBlock | OutputBlock<unknown>)[] = [];
+  const assistantMessages: (TextBlock | OutputBlock<AppMessage>)[] = [];
   let terminal = false;
   let currentState = ctx.currentState;
   const packStates = { ...ctx.packStates };
