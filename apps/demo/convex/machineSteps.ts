@@ -11,6 +11,7 @@ export const add = mutation({
     done: v.boolean(),
     messages: v.array(v.any()),
     instance: v.any(),
+    displayInstance: v.optional(v.any()),
     activeNodeInstructions: v.string(),
   },
   handler: async (ctx, args) => {

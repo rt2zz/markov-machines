@@ -3,6 +3,7 @@ import {
   createStandardExecutor,
 } from "markov-machines";
 import { memoryPack } from "./packs/memory";
+import { themePack } from "./packs/theme";
 import { rootNode } from "./nodes/root";
 import { fooNode } from "./nodes/foo";
 import { demoMemoryNode } from "./nodes/demo-memory";
@@ -16,7 +17,7 @@ export const demoCharter = createCharter({
     model: "claude-sonnet-4-5",
     maxTokens: 4096,
   }),
-  packs: [memoryPack],
+  packs: [memoryPack, themePack],
   nodes: {
     rootNode,
     fooNode,

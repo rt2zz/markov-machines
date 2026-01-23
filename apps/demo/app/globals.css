@@ -28,6 +28,25 @@ body {
   background: var(--terminal-bg);
   color: var(--terminal-green);
   font-family: var(--font-geist-mono), monospace;
+  /* Ensure content is composited correctly for blend mode */
+  isolation: isolate;
+}
+
+/* Gradient overlay that affects text/borders via blend mode */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--gradient-hue-1, 180), 100%, 50%) 0%,
+    hsl(var(--gradient-hue-2, 280), 100%, 50%) 100%
+  );
+  mix-blend-mode: hue;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: var(--gradient-intensity, 0);
+  transition: opacity 0.3s ease;
 }
 
 /* Terminal scanlines effect */
@@ -46,14 +65,15 @@ body {
   z-index: 10;
 }
 
-/* Terminal glow effect */
+/* Terminal glow effect - uses dynamic color */
 .terminal-glow {
-  text-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+  text-shadow: 0 0 5px var(--glow-color, rgba(0, 255, 0, 0.3));
 }
 
 /* Stronger glow for active elements */
 .terminal-glow-strong {
-  text-shadow: 0 0 8px rgba(0, 255, 0, 0.5), 0 0 15px rgba(0, 255, 0, 0.3);
+  text-shadow: 0 0 8px var(--glow-color, rgba(0, 255, 0, 0.5)),
+    0 0 15px var(--glow-color, rgba(0, 255, 0, 0.3));
 }
 
 /* Flicker animation for the cursor */

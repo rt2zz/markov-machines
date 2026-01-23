@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createNode, createTransition, cede, type ToolDefinition } from "markov-machines";
+import { themePack } from "../packs/theme";
 
 export const demoFavoritesStateValidator = z.object({
   airplane: z.string().optional(),
@@ -43,6 +44,7 @@ Watch the State tab on the right side - it updates in real-time as you collect a
 Once you've collected all three (or the user wants to stop), use returnToFoo with a nice summary.`,
 
   validator: demoFavoritesStateValidator,
+  packs: [themePack],
   tools: {
     updateFavorite,
   },

@@ -1,5 +1,6 @@
 "use client";
 
+import type { JSX } from "react";
 import { useAtom, useSetAtom } from "jotai";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -192,56 +193,125 @@ function TurnsView({ sessionId }: { sessionId: Id<"sessions"> }) {
   );
 }
 
-function MessagesView({ sessionId }: { sessionId: Id<"sessions"> }) {
-  const messages = useQuery(api.messages.list, { sessionId });
-  const session = useQuery(api.sessions.get, { id: sessionId });
-  const timeTravel = useMutation(api.sessions.timeTravel);
+// Content block types from Anthropic API
+interface TextBlock {
+  type: "text";
+  text: string;
+}
 
-  if (!messages) {
+interface ToolUseBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+interface ToolResultBlock {
+  type: "tool_result";
+  tool_use_id: string;
+  content: string | unknown[];
+}
+
+type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | { type: string; [key: string]: unknown };
+
+interface APIMessage {
+  role: "user" | "assistant";
+  content: string | ContentBlock[];
+}
+
+function ContentBlockView({ block }: { block: ContentBlock }) {
+  if (block.type === "text") {
+    return (
+      <div className="text-terminal-green-dim">
+        {(block as TextBlock).text}
+      </div>
+    );
+  }
+
+  if (block.type === "tool_use") {
+    const toolUse = block as ToolUseBlock;
+    return (
+      <div className="border border-terminal-cyan rounded p-2 space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="text-terminal-cyan font-bold">tool_use</span>
+          <span className="text-terminal-yellow">{toolUse.name}</span>
+        </div>
+        <pre className="text-terminal-green-dim text-xs whitespace-pre-wrap break-all max-h-40 overflow-auto bg-terminal-bg p-1 rounded">
+          {JSON.stringify(toolUse.input, null, 2)}
+        </pre>
+      </div>
+    );
+  }
+
+  if (block.type === "tool_result") {
+    const toolResult = block as ToolResultBlock;
+    const content = typeof toolResult.content === "string"
+      ? toolResult.content
+      : JSON.stringify(toolResult.content, null, 2);
+    return (
+      <div className="border border-terminal-green-dimmer rounded p-2 space-y-1">
+        <span className="text-terminal-green-dimmer">tool_result</span>
+        <pre className="text-terminal-green-dim text-xs whitespace-pre-wrap break-all max-h-24 overflow-auto">
+          {content}
+        </pre>
+      </div>
+    );
+  }
+
+  // Unknown block type
+  return (
+    <div className="text-terminal-green-dimmer text-xs">
+      <pre>{JSON.stringify(block, null, 2)}</pre>
+    </div>
+  );
+}
+
+function MessagesView({ sessionId }: { sessionId: Id<"sessions"> }) {
+  const steps = useQuery(api.machineSteps.getRecent, { sessionId, limit: 50 });
+
+  if (!steps) {
     return <div className="text-terminal-green-dimmer">Loading...</div>;
   }
 
-  if (messages.length === 0) {
+  // Flatten all messages from all steps
+  const allMessages: { stepId: string; stepNumber: number; message: APIMessage; index: number }[] = [];
+  for (const step of steps) {
+    (step.messages as APIMessage[]).forEach((msg, i) => {
+      allMessages.push({ stepId: step._id, stepNumber: step.stepNumber, message: msg, index: i });
+    });
+  }
+
+  if (allMessages.length === 0) {
     return <div className="text-terminal-green-dimmer italic">No messages yet</div>;
   }
 
-  const handleMessageClick = async (turnId: Id<"machineTurns"> | undefined) => {
-    if (turnId && turnId !== session?.turnId) {
-      await timeTravel({ sessionId, targetTurnId: turnId });
-    }
-  };
-
   return (
     <div className="space-y-3">
-      {messages.slice(-100).map((msg) => {
-        const isCurrent = msg.turnId === session?.turnId;
-        const canTimeTravel = msg.turnId && !isCurrent;
+      {allMessages.map(({ stepId, stepNumber, message, index }) => {
+        const content = message.content;
+        const blocks: ContentBlock[] = typeof content === "string"
+          ? [{ type: "text", text: content }]
+          : (content as ContentBlock[]);
 
         return (
           <div
-            key={msg._id}
-            onClick={() => canTimeTravel && handleMessageClick(msg.turnId)}
-            className={`
-              p-2 rounded border transition-colors
-              ${isCurrent
-                ? "border-terminal-green bg-terminal-bg-lighter"
-                : "border-terminal-green-dimmer"
-              }
-              ${canTimeTravel ? "cursor-pointer hover:border-terminal-green-dim" : ""}
-            `}
+            key={`${stepId}-${index}`}
+            className="p-2 rounded border border-terminal-green-dimmer"
           >
-            <div className="flex items-center justify-between">
-              <span className="text-terminal-cyan text-xs">{msg.role}</span>
-              {isCurrent && <span className="text-terminal-green text-xs">[current]</span>}
-              {canTimeTravel && (
-                <span className="text-terminal-cyan text-xs opacity-50 hover:opacity-100">
-                  [click to travel]
-                </span>
-              )}
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`text-xs font-bold ${
+                message.role === "user" ? "text-terminal-cyan" : "text-terminal-green"
+              }`}>
+                {message.role}
+              </span>
+              <span className="text-terminal-green-dimmer text-xs">
+                step #{stepNumber}
+              </span>
             </div>
-            <div className="text-xs text-terminal-green-dim mt-1">
-              {msg.content.slice(0, 200)}
-              {msg.content.length > 200 && "..."}
+            <div className="space-y-2 text-xs">
+              {blocks.map((block, blockIdx) => (
+                <ContentBlockView key={blockIdx} block={block} />
+              ))}
             </div>
           </div>
         );

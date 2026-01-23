@@ -11,6 +11,7 @@ export default defineSchema({
     parentId: v.optional(v.id("machineTurns")),
     instanceId: v.string(),
     instance: v.any(),
+    displayInstance: v.optional(v.any()),
     messages: v.array(v.any()),
     createdAt: v.number(),
   })
@@ -26,6 +27,7 @@ export default defineSchema({
     done: v.boolean(),
     messages: v.array(v.any()),
     instance: v.any(),
+    displayInstance: v.optional(v.any()),
     activeNodeInstructions: v.string(),
     createdAt: v.number(),
   })

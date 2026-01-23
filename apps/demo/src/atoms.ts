@@ -24,3 +24,12 @@ export const activeHistorySubtabAtom = atom<HistorySubtab>("steps");
 export const selectedStepIdAtom = atom<Id<"machineSteps"> | null>(null);
 export const stepPreviewInstanceAtom = atom<unknown | null>(null);
 export const isPreviewingAtom = atom<boolean>(false);
+
+// Theme state (synced from session instance)
+export const themeHueAtom = atom<number>(120);
+export const themeSaturationAtom = atom<number>(100);
+export const themeAnimatedAtom = atom<boolean>(false); // flux mode
+export const themeGradientAtom = atom<boolean>(false); // gradient overlay
+
+// Derived: current display hue (animated when flux mode is on)
+export const displayHueAtom = atom<number>(120);

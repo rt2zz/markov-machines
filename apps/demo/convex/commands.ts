@@ -13,6 +13,7 @@ import {
   type Message,
 } from "markov-machines";
 import { demoCharter } from "../src/agent/charter";
+import { serializeInstanceForDisplay } from "../src/serializeForDisplay";
 
 // Escape $ prefixed fields from JSON schema (Convex doesn't allow $ fields)
 // $schema -> __$schema, $ref -> __$ref, etc.
@@ -81,11 +82,15 @@ export const executeCommand = action({
       };
     }
 
+    const serializedInstance = serializeInstance(updatedMachine.instance, demoCharter);
+    const displayInstance = serializeInstanceForDisplay(updatedMachine.instance, demoCharter);
+
     const turnId = await ctx.runMutation(api.machineTurns.create, {
       sessionId,
       parentId: session.turnId,
       instanceId: updatedMachine.instance.id,
-      instance: serializeInstance(updatedMachine.instance, demoCharter),
+      instance: serializedInstance,
+      displayInstance,
     });
 
     await ctx.runMutation(api.machineSteps.add, {
@@ -96,13 +101,15 @@ export const executeCommand = action({
       response: JSON.stringify(result),
       done: true,
       messages: [],
-      instance: serializeInstance(updatedMachine.instance, demoCharter),
+      instance: serializedInstance,
+      displayInstance,
       activeNodeInstructions: updatedMachine.instance.node.instructions?.slice(0, 100) || "",
     });
 
     await ctx.runMutation(api.sessions.finalizeTurn, {
       turnId,
-      instance: serializeInstance(updatedMachine.instance, demoCharter),
+      instance: serializedInstance,
+      displayInstance,
       messages: [],
     });
 

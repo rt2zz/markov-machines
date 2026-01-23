@@ -6,8 +6,9 @@ export const create = mutation({
   args: {
     instanceId: v.string(),
     instance: v.any(),
+    displayInstance: v.optional(v.any()),
   },
-  handler: async (ctx, { instanceId, instance }) => {
+  handler: async (ctx, { instanceId, instance, displayInstance }) => {
     const sessionId = await ctx.db.insert("sessions", {
       currentTurnId: undefined,
     });
@@ -17,6 +18,7 @@ export const create = mutation({
       parentId: undefined,
       instanceId,
       instance,
+      displayInstance,
       messages: [],
       createdAt: Date.now(),
     });
@@ -41,6 +43,7 @@ export const get = query({
       turnId: session.currentTurnId,
       instanceId: currentTurn.instanceId,
       instance: currentTurn.instance,
+      displayInstance: currentTurn.displayInstance,
       messages: currentTurn.messages,
       createdAt: currentTurn.createdAt,
     };
@@ -83,10 +86,11 @@ export const finalizeTurn = mutation({
   args: {
     turnId: v.id("machineTurns"),
     instance: v.any(),
+    displayInstance: v.optional(v.any()),
     messages: v.array(v.any()),
   },
-  handler: async (ctx, { turnId, instance, messages }) => {
-    await ctx.db.patch(turnId, { instance, messages });
+  handler: async (ctx, { turnId, instance, displayInstance, messages }) => {
+    await ctx.db.patch(turnId, { instance, displayInstance, messages });
   },
 });
 

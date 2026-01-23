@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createNode, createTransition, cede, toolReply } from "markov-machines";
+import { themePack } from "../packs/theme";
 
 export const demoPingStateValidator = z.object({});
 
@@ -25,6 +26,7 @@ Explain that this is great for:
 When done demonstrating, use returnToFoo to go back.`,
 
   validator: demoPingStateValidator,
+  packs: [themePack],
   commands: {
     ping: {
       name: "ping",

@@ -6,11 +6,10 @@ import { JsonViewer } from "../shared/JsonViewer";
 
 interface SerializedInstance {
   id: string;
-  node: { ref?: string; instructions?: string } | string;
+  node: Record<string, unknown>;
   state: unknown;
   children?: SerializedInstance[];
   packStates?: Record<string, unknown>;
-  suspended?: { reason: string };
 }
 
 interface StateTabProps {
@@ -27,9 +26,12 @@ function getActiveLeafState(instance: SerializedInstance): unknown {
 
 function getActiveLeafNodeName(instance: SerializedInstance): string {
   if (!instance.children || instance.children.length === 0) {
-    return typeof instance.node === "string"
-      ? instance.node
-      : instance.node.ref ?? "inline";
+    // Check if node is a ref (has 'ref' property) or inline
+    const node = instance.node;
+    if ("ref" in node && typeof node.ref === "string") {
+      return node.ref;
+    }
+    return "inline";
   }
   const lastChild = instance.children[instance.children.length - 1];
   return lastChild ? getActiveLeafNodeName(lastChild) : "unknown";

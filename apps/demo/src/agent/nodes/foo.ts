@@ -3,6 +3,7 @@ import { createNode, createTransition, spawn, cede } from "markov-machines";
 import { demoMemoryNode } from "./demo-memory";
 import { demoPingNode } from "./demo-ping";
 import { demoFavoritesNode } from "./demo-favorites";
+import { themePack } from "../packs/theme";
 
 export const fooStateValidator = z.object({
   name: z.string(),
@@ -28,6 +29,7 @@ Encourage them to explore the right panel as you navigate!
 When the user is done, you can use cedeToParent to say goodbye.`,
 
   validator: fooStateValidator,
+  packs: [themePack],
   transitions: {
     spawnMemoryDemo: createTransition<FooState>({
       description: "Spawn the Memory Demo node to showcase the Pack system",

@@ -17,6 +17,7 @@ import {
   type MachineStep,
 } from "markov-machines";
 import { demoCharter, rootNode } from "../src/agent/charter";
+import { serializeInstanceForDisplay } from "../src/serializeForDisplay";
 
 function getActiveNodeInstructions(instance: Instance): string {
   const instructions = instance.node.instructions || "";
@@ -73,6 +74,7 @@ export const send = action({
       parentId: session.turnId,
       instanceId: machine.instance.id,
       instance: serializeInstance(machine.instance, demoCharter),
+      displayInstance: serializeInstanceForDisplay(machine.instance, demoCharter),
     });
 
     // Add user message with turnId for proper time travel filtering
@@ -100,6 +102,7 @@ export const send = action({
         done: step.done,
         messages: step.messages,
         instance: serializeInstance(step.instance, demoCharter),
+        displayInstance: serializeInstanceForDisplay(step.instance, demoCharter),
         activeNodeInstructions: getActiveNodeInstructions(step.instance),
       });
 
@@ -113,6 +116,7 @@ export const send = action({
     await ctx.runMutation(api.sessions.finalizeTurn, {
       turnId,
       instance: serializeInstance(lastStep.instance, demoCharter),
+      displayInstance: serializeInstanceForDisplay(lastStep.instance, demoCharter),
       messages: allMessages,
     });
 
@@ -128,16 +132,30 @@ export const send = action({
   },
 });
 
+// Initialize pack states from a node's packs
+function initPackStates(node: Node<unknown>): Record<string, unknown> {
+  const packStates: Record<string, unknown> = {};
+  for (const pack of node.packs ?? []) {
+    if (pack.initialState !== undefined) {
+      packStates[pack.name] = pack.initialState;
+    }
+  }
+  return packStates;
+}
+
 export const createSession = action({
   args: {},
   handler: async (ctx): Promise<Id<"sessions">> => {
-    const instance: Instance = createInstance(rootNode as Node<unknown>, {});
+    const packStates = initPackStates(rootNode as Node<unknown>);
+    const instance: Instance = createInstance(rootNode as Node<unknown>, {}, undefined, packStates);
 
     const serializedInstance = serializeInstance(instance, demoCharter);
+    const displayInstance = serializeInstanceForDisplay(instance, demoCharter);
 
     const sessionId = await ctx.runMutation(api.sessions.create, {
       instanceId: instance.id,
       instance: serializedInstance,
+      displayInstance,
     });
 
     return sessionId;

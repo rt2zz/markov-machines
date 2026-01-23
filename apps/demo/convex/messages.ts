@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Id, Doc } from "./_generated/dataModel";
 
 /**
  * Time Travel & Branching Implementation
@@ -83,7 +83,7 @@ export const listForTurnPath = query({
 
     while (currentId) {
       ancestorTurnIds.add(currentId);
-      const turn = await ctx.db.get(currentId);
+      const turn: Doc<"machineTurns"> | null = await ctx.db.get(currentId);
       if (!turn) break;
       currentId = turn.parentId ?? undefined;
     }

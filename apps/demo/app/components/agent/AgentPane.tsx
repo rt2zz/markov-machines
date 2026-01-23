@@ -15,11 +15,17 @@ import { DevTab } from "./DevTab";
 
 interface SerializedInstance {
   id: string;
-  node: { ref?: string; instructions?: string } | string;
+  node: Record<string, unknown>;
   state: unknown;
   children?: SerializedInstance[];
   packStates?: Record<string, unknown>;
-  suspended?: { reason: string };
+  executorConfig?: Record<string, unknown>;
+  suspended?: {
+    suspendId: string;
+    reason: string;
+    suspendedAt: string;
+    metadata?: Record<string, unknown>;
+  };
 }
 
 interface SerializedCommandInfo {
@@ -28,13 +34,45 @@ interface SerializedCommandInfo {
   inputSchema: { type: string; properties?: Record<string, unknown> };
 }
 
+interface DisplayCommand {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+interface DisplayInstance {
+  id: string;
+  node: {
+    name: string;
+    instructions: string;
+    validator: Record<string, unknown>;
+    tools: string[];
+    transitions: Record<string, string>;
+    commands: Record<string, DisplayCommand>;
+    initialState?: unknown;
+    packs?: string[];
+    worker?: boolean;
+  };
+  state: unknown;
+  children?: DisplayInstance[];
+  packStates?: Record<string, unknown>;
+  executorConfig?: Record<string, unknown>;
+  suspended?: {
+    suspendId: string;
+    reason: string;
+    suspendedAt: string;
+    metadata?: Record<string, unknown>;
+  };
+}
+
 interface AgentPaneProps {
   sessionId: Id<"sessions">;
   instance: SerializedInstance | undefined;
+  displayInstance: DisplayInstance | undefined;
   onResetSession: () => void;
 }
 
-export function AgentPane({ sessionId, instance, onResetSession }: AgentPaneProps) {
+export function AgentPane({ sessionId, instance, displayInstance, onResetSession }: AgentPaneProps) {
   const activeTab = useAtomValue(activeAgentTabAtom);
   const getCommands = useAction(api.commands.getCommands);
   const [commands, setCommands] = useState<SerializedCommandInfo[]>([]);
@@ -60,7 +98,7 @@ export function AgentPane({ sessionId, instance, onResetSession }: AgentPaneProp
       {/* Tab content */}
       <div className="flex-1 overflow-hidden p-4">
         {activeTab === "tree" && (
-          <InstanceTreeTab instance={instance ?? null} />
+          <InstanceTreeTab instance={instance ?? null} displayInstance={displayInstance ?? null} />
         )}
         {activeTab === "state" && <StateTab instance={instance ?? null} />}
         {activeTab === "history" && <HistoryTab sessionId={sessionId} />}
