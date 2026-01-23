@@ -6,7 +6,8 @@
   "license": "MIT",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsgo"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -19,6 +20,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "uuid": "^13.0.0",
-    "zod": "^4.3.4"
+    "zod": "catalog:"
   }
 }

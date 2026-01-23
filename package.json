@@ -3,6 +3,9 @@
   "type": "module",
   "private": true,
   "license": "MIT",
+  "catalog": {
+    "zod": "4"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -11,7 +14,8 @@
     "claude": "claude --plugin-dir ./.claude/plugins/jj"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@typescript/native-preview": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
